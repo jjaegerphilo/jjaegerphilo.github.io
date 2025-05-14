@@ -5,6 +5,7 @@
 <head>
    <meta charset="utf-8">
    <title>Jens Jäger</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 
 
@@ -14,17 +15,30 @@ a:hover{text-decoration: underline; color: 00000}
 
    .content-wrapper {
       display: flex;
+      flex-wrap: wrap;
       align-items: flex-start;
       gap: 20px; /* Space between the list and the image */
    }
 
    .paper-list {
       flex: 1; /* Allow the list to take available space */
+      min-width: 300px
    }
 
    .paper-image {
       width: 280px; /* Adjust width as needed */
       height: auto;
+   }
+
+   @media (max-width: 768px) {
+      .content-wrapper {
+         flex-direction: column; /* Stack the elements on top of each other on small screens */
+         align-items: center;
+      }
+
+      .paper-image {
+         width: 45%; 
+      }
    }
 
 </style>
