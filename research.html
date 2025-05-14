@@ -11,6 +11,22 @@
 <style type="text/css">
 a:link, a:visited {text-decoration: none;  color: 00000}
 a:hover{text-decoration: underline; color: 00000}
+
+   .content-wrapper {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px; /* Space between the list and the image */
+   }
+
+   .paper-list {
+      flex: 1; /* Allow the list to take available space */
+   }
+
+   .paper-image {
+      width: 280px; /* Adjust width as needed */
+      height: auto;
+   }
+
 </style>
 
 <script type="text/javascript">
@@ -100,21 +116,27 @@ a:hover{text-decoration: underline; color: 00000}
                </li>
 
             </ol>
-
             <div style="margin-top: 30px; font-size: 20px">
                <u>Under Review:</u>
             </div>
-            <ul style="margin-top: 13px; margin-bottom: 0px; padding-left: 17px; font-size: 17px">
-               <li style="margin-bottom: 5px"> A paper arguing against extant counterfactualist reductions of causation <a href="Synchronic_v37.pdf" style=" " target="_blank">[draft]</b></a></li>
-            </ul>
+            <div class="content-wrapper">
+               <div class="paper-list">
+                  <ul style="margin-top: 13px; margin-bottom: 0px; padding-left: 17px; font-size: 17px">
+                     <li style="margin-bottom: 5px"> A paper arguing against extant counterfactualist reductions of causation <a href="Synchronic_v37.pdf" style=" " target="_blank">[draft]</b></a></li>
+                  </ul>
 
-            <div style="margin-top: 30px;font-size: 20px">
-               <u>In Progress:</u>
-            </div>
-            <ul style="margin-top: 13px; margin-bottom: 0px; padding-left: 17px; font-size: 17px">
-               <li style="margin-bottom: 5px"> A paper developing a reductive account of causation compatible with synchronic laws</li>
-               <li style="margin-bottom: 5px">A paper on the Gibbs paradox and haecceitism</li>
-            </ul>
+                  <div style="margin-top: 30px;font-size: 20px">
+                     <u>In Progress:</u>
+                  </div>
+                  <ul style="margin-top: 13px; margin-bottom: 0px; padding-left: 17px; font-size: 17px">
+                     <li style="margin-bottom: 5px"> A paper developing a reductive account of causation compatible with synchronic laws</li>
+                     <li style="margin-bottom: 5px">A paper on the Gibbs paradox and haecceitism</li>
+                  </ul>
+               </div>
+               <div><img class="paper-image" src="pic-Milo.jpg" alt="Hard at work with my co-author">
+               </div>
+            </div> 
+
             <hr style="height: 14px; visibility: hidden;">
             <div style="font-size: 20px;">
                <u>Dissertation:</u> <i>Chance and Causation in Spacetime</i>
