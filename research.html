@@ -10,17 +10,22 @@
 
 <style type="text/css">
 
-   /* Reset default styles */
    body, html {
       margin: 0;
       padding: 0;
       width: 100%;
-      height: 100%;
+      min-height:100%;
       font-family: Times New Roman, serif;
    }
 
-   a:link, a:visited {text-decoration: none;  color: 00000}
-   a:hover{text-decoration: underline; color: 00000}
+   body::after{
+     content:"";
+     display:block;
+     height:30px;
+   }
+
+   a:link, a:visited {text-decoration: none;  color: #00000}
+   a:hover{text-decoration: underline; color: #00000}
 
    .content-wrapper {
       display: flex;
@@ -61,6 +66,8 @@
        e.style.display = 'block';
  }
 </script>
+
+<body link="#0000CC" vlink="#0000CC" alink="#0000CC">
 
 <div style="font-family: Times New Roman, serif;">
    <br>
@@ -159,13 +166,16 @@
                <div><img class="paper-image" src="pic-Milo.jpg" alt="Hard at work with my co-author">
                </div>
             </div> 
-
-            <hr style="height: 14px; visibility: hidden;">
-            <div style="font-size: 20px;">
-               <u>Dissertation:</u> <i>Chance and Causation in Spacetime</i>
+            <br>
+            <div style="font-size: 20px"><u>Dissertation:</u></div> 
+            
+            <div style="margin-top:8px; margin-left:20px"><a href="dissertation.pdf" style="font-size: 17px" target="_blank">Dependencies Across Spacetime: The Geometry of Chance and Causation</a>
+            <a href="#" onclick="toggle_visibility('DISS'); return false" style="font-size: 17px" > <FONT COLOR="#636363"> [abstract]</FONT></a></div>
+            
+            <div id='DISS' style="display:none; margin-top: 10px; margin-left: 40px; margin-bottom: 0px; font-size: 17px; text-align: justify; text-justify: inter-word; width: 633px">
+               Philosophical investigations into the nature of chance and causation have typically assumed classical spacetime backgrounds. My dissertation argues that this practice misses important lessons. I argue that, by tying chance functions to times, orthodox theories of chance cannot state important Markov-style independence principles and fail outright in spacetimes that lack a linear time structure, e.g.~due to closed time-like curves. By contrast, the urchance approach, developed in the dissertation's first half, works in any spacetime geometry, captures the needed independence principles, and resolves the puzzle of chances on closed time-like curves. Two general morals follow: chance isn't as intimately tied to time or causation as is usually thought, and chances can vary even across intrinsically duplicate trials.
+               <div style="margin-top:8px">On the causation side, counterfactualist reductions are unable to deal with synchronic nomic constraints—law-based, yet non-causal, links between simultaneous events. These constraints occur not only in temporal-loop geometries but also in common-or-garden theories like Maxwellian electrodynamics, set in ordinary relativistic spacetimes. I argue that, to save the counterfactualist approach to causation, its defenders must separate genuinely dynamical counterfactual influences from those produced solely by synchronic constraints.</div>
             </div>
-            <div style="margin-top: 7px; margin-bottom: 0px; font-size: 17px; text-align: justify; text-justify: inter-word; width: 633px">
-            Philosophical investigations into the nature of chance and causation have typically assumed standard spacetime backgrounds. My dissertation argues that this practice misses important lessons. By examining how chance and causation behave in non-standard spacetime settings<span>&#8212;</span>particularly ones involving <i>closed causal curves</i>, spacetime trajectories which (roughly speaking) travel back in time and loop in on themselves<span>&#8212;</span>we glean fundamental insights missed by conventional approaches. Some of the claims I defend are that chances aren’t necessarily constant across intrinsically duplicate trials; that chance isn’t as intimately tied to time or causation as is usually thought; and that causation is better reduced to spacetime structure and laws than to counterfactual dependence.</div>
          </div>
       </div>
    </div>
