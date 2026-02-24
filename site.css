@@ -1,0 +1,323 @@
+:root {
+  --page-max-width: 700px;
+  --text-color: #111;
+  --link-color: #163f89;
+  --muted-link-color: #5f5f5f;
+  --border-color: #111;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  overflow-y: scroll;
+}
+
+@supports (scrollbar-gutter: stable) {
+  html {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  font-family: "Times New Roman", Times, serif;
+  color: var(--text-color);
+  background: #fff;
+}
+
+body {
+  line-height: 1.45;
+}
+
+a {
+  color: var(--link-color);
+  text-decoration: none;
+}
+
+a:hover,
+a:focus {
+  text-decoration: underline;
+}
+
+.page {
+  width: min(var(--page-max-width), 100% - 2rem);
+  margin: 1.75rem auto 2.5rem;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 0.75rem 1.5rem;
+}
+
+.site-title {
+  margin: 0;
+  font-size: clamp(1.9rem, 4vw, 2.1rem);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 1.2rem;
+}
+
+.site-nav a.active {
+  color: var(--text-color);
+}
+
+.site-nav .divider {
+  color: var(--text-color);
+  font-size: 1.08em;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.section-divider {
+  border: 0;
+  border-top: 2px solid var(--border-color);
+  margin: 0.8rem 0 1.8rem;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 250px) minmax(0, 1fr);
+  gap: 1.35rem 1.8rem;
+  align-items: start;
+}
+
+.profile-photo {
+  width: 100%;
+  max-width: 250px;
+  height: auto;
+  display: block;
+}
+
+.contact {
+  font-size: 1.08rem;
+}
+
+.bio {
+  margin-top: 1.8rem;
+  font-size: 1.1rem;
+  text-align: justify;
+}
+
+.bio p {
+  margin: 0 0 1rem;
+}
+
+.bio p:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  margin: 0 0 0.65rem;
+  font-size: 1.35rem;
+  font-weight: 400;
+  text-decoration: underline;
+}
+
+.subheading {
+  margin: 1.55rem 0 0.45rem;
+  font-size: 1.23rem;
+  font-weight: 400;
+  text-decoration: underline;
+}
+
+.paper-list,
+.course-list {
+  margin: 0.55rem 0 0;
+  padding-left: 1.3rem;
+  font-size: 1.06rem;
+}
+
+.paper-list li,
+.course-list li {
+  margin-bottom: 0.65rem;
+}
+
+.paper-list li:last-child,
+.course-list li:last-child {
+  margin-bottom: 0;
+}
+
+.citation {
+  display: block;
+  margin-top: 0.08rem;
+}
+
+.paper-meta {
+  margin-top: 0.08rem;
+}
+
+.paper-meta .citation {
+  display: inline;
+  margin-top: 0;
+}
+
+.abstract {
+  margin: 0.28rem 0 0.6rem 0.8rem;
+}
+
+.abstract summary {
+  color: var(--muted-link-color);
+  cursor: pointer;
+  user-select: none;
+}
+
+.abstract p {
+  margin: 0.45rem 0 0;
+  text-align: justify;
+}
+
+.inline-abstract {
+  display: inline;
+  margin: 0 0 0 0.25rem;
+}
+
+.inline-abstract summary {
+  display: inline;
+}
+
+.inline-abstract summary::marker {
+  content: "";
+}
+
+.inline-abstract summary::-webkit-details-marker {
+  display: none;
+}
+
+.inline-abstract > p {
+  display: none;
+}
+
+.inline-abstract[open] > p {
+  display: block;
+  margin: 0.3rem 0 0.6rem 0.8rem;
+}
+
+.inline-abstract[open] > p + p {
+  margin-top: 0.45rem;
+}
+
+.research-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.35rem 1.8rem;
+}
+
+.research-column {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.research-image {
+  flex: 0 1 260px;
+  margin: 0;
+}
+
+.research-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.section-block {
+  margin-top: 1.15rem;
+}
+
+.group-label {
+  margin: 0.95rem 0 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+
+.dissertation {
+  margin-top: 1.3rem;
+}
+
+.dissertation-link {
+  font-size: 1.06rem;
+}
+
+.dissertation-link .inline-abstract {
+  margin-left: 0.12rem;
+}
+
+.dissertation .abstract:not(.inline-abstract) {
+  margin-left: 1rem;
+}
+
+@media (max-width: 800px) {
+  .page {
+    width: min(var(--page-max-width), 100% - 1.4rem);
+    margin-top: 1rem;
+  }
+
+  .site-nav {
+    font-size: 1.06rem;
+  }
+
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-photo {
+    max-width: min(320px, 100%);
+  }
+
+  .bio {
+    margin-top: 1.35rem;
+  }
+
+  .research-image {
+    flex-basis: 220px;
+  }
+}
+
+@media (max-width: 520px) {
+  .site-header {
+    gap: 0.65rem;
+  }
+
+  .section-divider {
+    margin-bottom: 1.35rem;
+  }
+
+  .section-title {
+    font-size: 1.28rem;
+  }
+
+  .paper-list,
+  .course-list,
+  .bio,
+  .contact,
+  .dissertation-link {
+    font-size: 1rem;
+  }
+}

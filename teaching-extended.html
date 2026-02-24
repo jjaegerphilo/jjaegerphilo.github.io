@@ -1,176 +1,74 @@
 <!DOCTYPE html>
-
-<html>
-
+<html lang="en">
 <head>
-   <meta charset="utf-8">
-   <title>Jens Jäger</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jens Jäger - Teaching (Extended)</title>
+  <link rel="stylesheet" href="site.css">
 </head>
+<body>
+  <main class="page">
+    <header class="site-header">
+      <h1 class="site-title">Jens Jäger</h1>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="index.html">about</a>
+        <span class="divider" aria-hidden="true">|</span>
+        <a href="research.html">research</a>
+        <span class="divider" aria-hidden="true">|</span>
+        <a href="teaching.html" class="active" aria-current="page">teaching</a>
+      </nav>
+    </header>
 
+    <hr class="section-divider">
 
-<style type="text/css">
+    <section aria-label="Teaching Details">
+      <h2 class="section-title">Sole Instructor:</h2>
 
-   /* Reset default styles */
-   body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      font-family: Times New Roman, serif;
-   }
+      <h3 class="group-label">At UT Austin:</h3>
+      <ul class="course-list">
+        <li>Introductory Symbolic Logic, Spring '26</li>
+        <li>Science and the Modern World, Spring '26</li>
+        <li>Epistemology, Fall '25</li>
+      </ul>
 
-   a:link, a:visited {text-decoration: none;  color: 00000}
-   a:hover{text-decoration: underline; color: 00000}
+      <h3 class="group-label">At NYU:</h3>
+      <ul class="course-list">
+        <li>Philosophy of Science, Summer '23</li>
+      </ul>
 
-   .content-wrapper {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      gap: 20px; /* Space between the list and the image */
-   }
+      <div class="section-block">
+        <h2 class="section-title">Teaching Assistant:</h2>
 
-   .paper-list {
-      flex: 1; /* Allow the list to take available space */
-      min-width: 300px
-   }
+        <h3 class="group-label">At NYU:</h3>
+        <ul class="course-list">
+          <li>Ethics (Samuel Scheffler), S'22</li>
+          <li>Philosophy of Physics: Quantum Mechanics (Tim Maudlin), F'21</li>
+          <li>Great Works of Philosophy (Tim Maudlin), S'21</li>
+          <li>Advanced Logic (Cian Dorr), F'20</li>
+        </ul>
 
-   .paper-image {
-      width: 280px; /* Adjust width as needed */
-      height: auto;
-   }
-
-   @media (max-width: 768px) {
-      .content-wrapper {
-         flex-direction: column; /* Stack the elements on top of each other on small screens */
-         align-items: center;
-      }
-
-      .paper-image {
-         width: 45%; 
-      }
-   }
-
-</style>
-
-<script type="text/javascript">
- function toggle_visibility(id) {
-    var e = document.getElementById(id);
-    if(e.style.display == 'block')
-       e.style.display = 'none';
-    else
-       e.style.display = 'block';
- }
-</script>
-
-<div style="font-family: Times New Roman, serif">
-   <br>
-   <div style="left: 200px; top: 37px; width:300px; position:absolute; z-index: 2; font-size: 28px">Jens Jäger
-   </div>
-
-   <div style="left: 623px; top: 40px; width:720px; position:absolute; z-index: 2; font-size: 20px; ">
-      <table border=0 width="219" cellpadding="1"> <tr>
-         <td>
-            <div class="link"><a href="index.html"><FONT COLOR="#000CC">about</FONT></a></div>
-         </td> 
-         <td>
-            <div style="border-left: 2px solid black; height:23px; margin-right: 1px;"></div>
-         </td>
-         <td>
-            <div class="link"><a href="research.html"><FONT COLOR="#000CC">research</FONT></a></div>
-         </td> 
-         <td>
-            <div style="border-left: 2px solid black; height:23px; margin-left: -3px;"></div>     
-         </td>
-         <td>
-            <div class="link"><a href="teaching.html"><FONT COLOR="#000000">teaching</FONT></a></div>
-         </td> 
-      </table>
-   </div>
-</div>
-
-<br>
-<br>
-
-<body link="#000CC"; vlink="#0000CC"; alink="#0000CC">
-
-   <div style="font-family: Times New Roman, serif;">
-
-      <div class="row">
-         <hr style="position: absolute; top: 65px; left: 200px; width: 633px; height: 2px; border-width: 0px; color: black; background-color: black;">
+        <h3 class="group-label">At ETH Zurich:</h3>
+        <ul class="course-list">
+          <li>Methods of Mathematical Physics (Eugene Trubowitz), F'15</li>
+          <li>Numerical Methods for Physicists (Vasile Gradinaru), S'14 and S'15</li>
+        </ul>
       </div>
 
-      <div style="left: 200px; top: 110px; width:680px; position:absolute; z-index: 2; font-size: 16; ">
-         <div style="top: 400px; ">
-            <div style="font-size: 20px">
-               <u>Sole Instructor:</u>
-            </div>
-            <div style="font-size: 18px; margin-top: 13px">
-               At UT Austin:
-            </div>
-            <ul Style="margin-top: 10px; margin-bottom: 0px; padding-left: 17px; font-size: 16px">
-               <li style="margin-bottom: 5px">Introductory Symbolic Logic, Spring '26</li>
-               <li style="margin-bottom: 5px">Science and the Modern World, Spring '26</li>
-               <li style="margin-bottom: 5px">Epistemology, Fall '25</li> 
-            </ul>
-            <div style="font-size: 18px; margin-top: 13px">
-               At NYU:
-            </div>
-            <ul Style="margin-top: 10px; margin-bottom: 0px; padding-left: 17px; font-size: 16px">
-               <li style="margin-bottom: 5px">Philosophy of Science, Summer '23</li> 
-            </ul>
-            <hr style="height: 12px; visibility: hidden;">
-            <div style="font-size: 20px">
-               <u>Teaching Assistant:</u>
-            </div>
-            <div style="font-size: 18px; margin-top: 13px">
-               At NYU:
-            </div>
-            <ul Style="margin-top: 10px; margin-bottom: 0px; padding-left: 17px; font-size: 16px">
-               <li style="margin-bottom: 5px">Ethics (Samuel Scheffler), S'22</li> 
-               <li style="margin-bottom: 5px">Philosophy of Physics: Quantum Mechanics (Tim Maudlin), F'21</li> 
-               <li style="margin-bottom: 5px">Great Works of Philosophy (Tim Maudlin), S'21</li>
-               <li style="margin-bottom: 5px">Advanced Logic (Cian Dorr), F'20</li>
-            </ul>
-            <div style="font-size: 18px; margin-top: 13px">
-               At ETH Zurich:
-            </div>
-            <ul Style="margin-top: 10px; margin-bottom: 0px; padding-left: 17px; font-size: 16px">
-               <li style="margin-bottom: 5px">Methods of Mathematical Physics (Eugene Trubowitz), F'15</li> 
-               <li style="margin-bottom: 5px">Numerical Methods for Physicists (Vasile Gradinaru), S'14 & S'15</li>
-            </ul>
-
-            <hr style="height: 12px; visibility: hidden;">
-
-            <div style="font-size: 20px">
-               <u>Outreach:</u>
-            </div>
-            <ul style="margin-top: 10px; margin-bottom: 0px; padding-left: 17px; font-size: 16px">
-               <li style="margin-bottom: 5px">“Corrupt the Youth”, East Side Community High School, S'20, S'22, S'23, S'24</li>
-               <li style="margin-bottom: 5px">“College & Career Lab”, public middle schools in NYC, Summer '21</li>
-            </ul>
-
-            <hr style="height: 12px; visibility: hidden;">
-
-            <div style="font-size: 20px">
-               <u>Certification:</u>
-            </div>
-            <ul style="margin-top: 10px; margin-bottom: 0px; padding-left: 17px; font-size: 16px">
-               <li style="margin-bottom: 5px"> Teaching Certificates I & II, Graduate School of Arts & Sciences, NYU, S'21 & F'21
-               </ul>
-
-               <hr style="height: 12px; visibility: hidden;">
-
-            </div>
-         </div>
+      <div class="section-block">
+        <h2 class="section-title">Outreach:</h2>
+        <ul class="course-list">
+          <li>"Corrupt the Youth", East Side Community High School, S'20, S'22, S'23, S'24</li>
+          <li>"College and Career Lab", public middle schools in NYC, Summer '21</li>
+        </ul>
       </div>
-   </div>
+
+      <div class="section-block">
+        <h2 class="section-title">Certification:</h2>
+        <ul class="course-list">
+          <li>Teaching Certificates I and II, Graduate School of Arts and Sciences, NYU, S'21 and F'21</li>
+        </ul>
+      </div>
+    </section>
+  </main>
 </body>
-
-
-
-
-
-
-<br><br><br><br><br><br><br><br><br>
-
-
+</html>

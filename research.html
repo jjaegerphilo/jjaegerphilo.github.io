@@ -1,189 +1,138 @@
 <!DOCTYPE html>
-
-<html>
-
+<html lang="en">
 <head>
-   <meta charset="utf-8">
-   <title>Jens Jäger</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jens Jäger - Research</title>
+  <link rel="stylesheet" href="site.css">
 </head>
+<body>
+  <main class="page">
+    <header class="site-header">
+      <h1 class="site-title">Jens Jäger</h1>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="index.html">about</a>
+        <span class="divider" aria-hidden="true">|</span>
+        <a href="research.html" class="active" aria-current="page">research</a>
+        <span class="divider" aria-hidden="true">|</span>
+        <a href="teaching.html">teaching</a>
+      </nav>
+    </header>
 
+    <hr class="section-divider">
 
-<style type="text/css">
+    <section aria-label="Published Papers">
+      <h2 class="section-title">Published Papers:</h2>
+      <ol class="paper-list" reversed start="3">
+        <li>
+          <a href="https://philpapers.org/archive/JGELAT.pdf" target="_blank" rel="noopener noreferrer">Loops and the Geometry of Chance</a>
+          <div class="paper-meta">
+            <span class="citation">2025. <i>Noûs.</i></span>
+            <details class="abstract inline-abstract">
+              <summary>[abstract]</summary>
+              <p>
+                Suppose your evil sibling travels back in time, intending to lethally poison your grandfather when he was still
+                an infant. Determined to save him, you grab two antidotes and follow your sibling through the wormhole. Under
+                normal circumstances, each antidote has a 50% chance of curing a poisoning. Upon finding young grandpa, poisoned,
+                you administer the first antidote. Alas, it has no effect. The second antidote is your last hope. You administer
+                it and success: the paleness vanishes from grandpa's face, and he is healed. As you administered the first potion,
+                what was the chance that it would be effective?
+              </p>
+              <p>
+                This essay offers a systematic account of this case, and others like it. The central question is this: given a
+                certain time travel structure, what are the chances? In particular, I develop a theory about the connection
+                between these chances and the chances in ordinary, time-travel-free contexts. Central to the account is a Markov
+                condition involving the boundaries of spacetime regions.
+              </p>
+            </details>
+          </div>
+        </li>
 
-   body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      min-height:100%;
-      font-family: Times New Roman, serif;
-   }
+        <li>
+          <a href="https://philpapers.org/archive/JAEIBD.pdf" target="_blank" rel="noopener noreferrer">Immortal Beauty: Does Existence Confirm Reincarnation?</a>
+          <div class="paper-meta">
+            <span class="citation">2022. <i>Australasian Journal of Philosophy.</i></span>
+            <details class="abstract inline-abstract">
+              <summary>[abstract]</summary>
+              <p>
+                I argue that a popular view about self-locating evidence implies that there are cases in which agents have
+                surprisingly strong evidence for their own reincarnation. The central case is an "Immortal Beauty" scenario,
+                modeled after the well-known Sleeping Beauty puzzle. I argue that if the popular "thirder" solution to the puzzle
+                is correct, then Immortal Beauty should be confident that she is going to be reincarnated. The essay also examines
+                another pro-reincarnation argument due to Michael Huemer (2021). I argue that his argument fails, and that my
+                argument establishes an alternative way in which mere existence can be evidence for reincarnation. I then examine
+                whether my result generalizes.
+              </p>
+            </details>
+          </div>
+        </li>
 
-   body::after{
-     content:"";
-     display:block;
-     height:30px;
-   }
+        <li>
+          <a href="https://philpapers.org/archive/JGELAM.pdf" target="_blank" rel="noopener noreferrer">List and Menzies on High-Level Causation</a>
+          <div class="paper-meta">
+            <span class="citation">2021. <i>Pacific Philosophical Quarterly.</i></span>
+            <details class="abstract inline-abstract">
+              <summary>[abstract]</summary>
+              <p>
+                I raise two objections against Christian List and Peter Menzies' influential account of high-level causation.
+                Improving upon some of Stephen Yablo's earlier work, I develop an alternative theory that evades both objections.
+                The discussion calls into question List and Menzies' main contention, namely, that the exclusion principle,
+                applied to difference-making, is false.
+              </p>
+            </details>
+          </div>
+        </li>
+      </ol>
+    </section>
 
-   a:link, a:visited {text-decoration: none;  color: #00000}
-   a:hover{text-decoration: underline; color: #00000}
+    <section class="research-layout" aria-label="Current Projects">
+      <div class="research-column">
+        <h2 class="subheading">Under Review:</h2>
+        <ul class="paper-list">
+          <li>
+            A paper arguing against extant counterfactualist reductions of causation
+            <a href="Synchronic_v37.pdf" target="_blank" rel="noopener noreferrer">[draft]</a>
+          </li>
+        </ul>
 
-   .content-wrapper {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      gap: 20px; /* Space between the list and the image */
-   }
-
-   .paper-list {
-      flex: 1; /* Allow the list to take available space */
-      min-width: 300px
-   }
-
-   .paper-image {
-      width: 280px; /* Adjust width as needed */
-      height: auto;
-   }
-
-   @media (max-width: 768px) {
-      .content-wrapper {
-         flex-direction: column; /* Stack the elements on top of each other on small screens */
-         align-items: center;
-      }
-
-      .paper-image {
-         width: 45%; 
-      }
-   }
-
-</style>
-
-<script type="text/javascript">
- function toggle_visibility(id) {
-    var e = document.getElementById(id);
-    if(e.style.display == 'block')
-       e.style.display = 'none';
-    else
-       e.style.display = 'block';
- }
-</script>
-
-<body link="#0000CC" vlink="#0000CC" alink="#0000CC">
-
-<div style="font-family: Times New Roman, serif;">
-   <br>
-   <div style="left: 200px; top: 37px; width:300px; position:absolute; z-index: 2; font-size: 28px">Jens Jäger
-   </div>
-
-   <div style="left: 623px; top: 40px; width:720px; position:absolute; z-index: 2; font-size: 20px; ">
-      <table border=0 width="219" cellpadding="1"> <tr>
-         <td>
-            <div class="link"><a href="index.html"><FONT COLOR="#000CC">about</FONT></a></div>
-         </td> 
-         <td>
-            <div style="border-left: 2px solid black; height:23px; margin-right: 1px;"></div>
-         </td>
-         <td>
-            <div class="link"><a href="research.html"><FONT COLOR="#000000">research</FONT></a></div>
-         </td> 
-         <td>
-            <div style="border-left: 2px solid black; height:23px; margin-left: -3px;"></div>     
-         </td>
-         <td>
-            <div class="link"><a href="teaching.html"><FONT COLOR="#000CC">teaching</FONT></a></div>
-         </td> 
-      </table>
-   </div>
-</div>
-
-<br>
-<br>
-
-<body link="#000CC"; vlink="#0000CC"; alink="#0000CC">
-
-   <div style="font-family: Times New Roman, serif;">
-
-      <div class="row">
-         <hr style="position: absolute; top: 65px; left: 200px; width: 633px; height: 2px; border-width: 0px; color: black; background-color: black;">
+        <h2 class="subheading">In Progress:</h2>
+        <ul class="paper-list">
+          <li>A paper developing a reductive account of causation compatible with synchronic laws</li>
+          <li>A paper on the Gibbs paradox and haecceitism</li>
+        </ul>
       </div>
 
-      <div style="left: 200px; top: 110px; width:633px; position:absolute; z-index: 2; ">
-         <div style="top: 400px; ">
-            <div style="font-size: 20px;">
-               <u>Published Papers:</u>
-            </div>
-            <ol reversed style="margin-top: 13px; margin-bottom: 0px; padding-left: 17px; font-size: 17px" >
-               <li><a href="https://philpapers.org/archive/JGELAT.pdf" style=" " target="_blank">Loops and the Geometry of Chance</a><br>
+      <figure class="research-image">
+        <img src="pic-Milo.jpg" alt="Hard at work with my co-author">
+      </figure>
+    </section>
 
-                  2025. <i>Noûs.</i>
-                  <a href="#" onclick="toggle_visibility('COL'); return false" style=" "><FONT COLOR="#636363"> [abstract]</FONT></a> 
-                  
-                  <div id="COL" style="display:none; margin-top: 10px;margin-bottom: 15px; margin-left: 20px; text-align: justify; text-justify: inter-word;">
-                        Suppose your evil sibling travels back in time, intending to lethally poison your grandfather when he was still an infant. Determined to save him, you grab two antidotes and follow your sibling through the wormhole. Under normal circumstances, each antidote has a 50% chance of curing a poisoning. Upon finding young grandpa, poisoned, you administer the first antidote. Alas, it has no effect. The second antidote is your last hope. You administer it—and success: the paleness vanishes from grandpa’s face, and he is healed. As you administered the first potion, what was the chance that it would be effective?<br>
-                        This essay offers a systematic account of this case, and others like it. The central question is this: Given a certain time travel structure, what are the chances? In particular, I’ll develop a theory about the connection between these chances and the chances in ordinary, time-travel-free contexts. Central to the account is a Markov condition involving the boundaries of spacetime regions.
-
-                  </div>
-               </li>
-               <li style="margin-top: 10px;"><a href="https://philpapers.org/archive/JAEIBD.pdf" style=" " target="_blank">Immortal Beauty: Does Existence Confirm Reincarnation?</a><br>
-
-                  2022. <i>Australasian Journal of Philosophy.</i>
-
-                  <a href="#" onclick="toggle_visibility('IB'); return false" style=" "> <FONT COLOR="#636363"> [abstract]</FONT></a> 
-
-                  <div id="IB" style="display:none; margin-top: 10px;margin-bottom: 15px; margin-left: 20px; text-align: justify; text-justify: inter-word;">
-
-                        I argue that a popular view about self-locating evidence implies that there are cases in which agents have surprisingly strong evidence for their own reincarnation. The central case is an ‘Immortal Beauty' scenario, modelled after the well-known Sleeping Beauty puzzle. I argue that if the popular ‘thirder’ solution to the puzzle is correct, then Immortal Beauty should be confident that she's going to be reincarnated. The essay also examines another pro-reincarnation argument due to Michael Huemer (2021). I argue that his argument fails, and that my argument establishes an alternative way in which mere existence can be evidence for reincarnation. I then examine whether my result generalizes.
-
-                  </div>
-               </li>
-               <li style="margin-top: 10px;"><a href="https://philpapers.org/archive/JGELAM.pdf" style=" " target="_blank">List and Menzies on High-Level Causation</a><br>
-                 2021. <i>Pacific Philosophical Quarterly.</i>
-                  <a href="#" onclick="toggle_visibility('ML'); return false" style=" "> <FONT COLOR="#636363"> [abstract]</FONT></a> 
-                  <div id="ML" style="display:none; margin-top: 10px;margin-bottom: 15px; margin-left: 20px; text-align: justify; text-justify: inter-word;">
-                           I raise two objections against Christian List and Peter Menzies' influential account of high-level causation. Improving upon some of Stephen Yablo's earlier work, I develop an alternative theory which evades both objections. The discussion calls into question List and Menzies' main contention, namely, that the exclusion principle, applied to difference-making, is false.
-                  </div>
-               </li>
-
-            </ol>
-            <div style="margin-top: 30px; font-size: 20px">
-               <u>Under Review:</u>
-            </div>
-            <div class="content-wrapper">
-               <div class="paper-list">
-                  <ul style="margin-top: 13px; margin-bottom: 0px; padding-left: 17px; font-size: 17px">
-                     <li style="margin-bottom: 5px"> A paper arguing against extant counterfactualist reductions of causation <a href="Synchronic_v37.pdf" style=" " target="_blank">[draft]</b></a></li>
-                  </ul>
-
-                  <div style="margin-top: 30px;font-size: 20px">
-                     <u>In Progress:</u>
-                  </div>
-                  <ul style="margin-top: 13px; margin-bottom: 0px; padding-left: 17px; font-size: 17px">
-                     <li style="margin-bottom: 5px"> A paper developing a reductive account of causation compatible with synchronic laws</li>
-                     <li style="margin-bottom: 5px">A paper on the Gibbs paradox and haecceitism</li>
-                  </ul>
-               </div>
-               <div><img class="paper-image" src="pic-Milo.jpg" alt="Hard at work with my co-author">
-               </div>
-            </div> 
-            <br>
-            <div style="font-size: 20px"><u>Dissertation:</u></div> 
-            
-            <div style="margin-top:8px; margin-left:20px"><a href="https://philpapers.org/archive/JGEDAS.pdf" style="font-size: 17px" target="_blank">Dependencies Across Spacetime: The Geometry of Chance and Causation</a>
-            <a href="#" onclick="toggle_visibility('DISS'); return false" style="font-size: 17px" > <FONT COLOR="#636363"> [abstract]</FONT></a></div>
-            
-            <div id='DISS' style="display:none; margin-top: 10px; margin-left: 40px; margin-bottom: 0px; font-size: 17px; text-align: justify; text-justify: inter-word; width: 633px">
-               Philosophical investigations into the nature of chance and causation have typically assumed classical spacetime backgrounds. My dissertation argues that this practice misses important lessons. By tying chance functions to a global time parameter—a structure of classical spacetimes—orthodox theories of chance cannot state important Markov-style principles and fail outright in spacetimes that lack a linear time structure, e.g. due to closed time-like curves. By contrast, the <i>urchance</i> approach, developed in the dissertation's first half, assumes no such parameter, works in any spacetime geometry, captures the needed independence principles, and resolves the puzzle of chances on closed time-like curves. Two general morals follow: chance isn't as intimately tied to time or causation as is usually thought, and chances can vary even across intrinsically duplicate trials.
-               <div style="margin-top:8px">On the causation side, counterfactualist reductions are unable to deal with <i>synchronic</i> nomic constraints—law-based, yet non-causal, links between simultaneous events. These constraints occur not only in temporal-loop geometries but also in common-or-garden theories like Maxwellian electrodynamics. To save the counterfactualist approach to causation, its defenders must separate genuinely dynamical counterfactual influences from those produced solely by synchronic constraints.</div>
-            </div>
-         </div>
+    <section class="dissertation" aria-label="Dissertation">
+      <h2 class="subheading">Dissertation:</h2>
+      <div class="dissertation-link">
+        <a href="https://philpapers.org/archive/JGEDAS.pdf" target="_blank" rel="noopener noreferrer">Dependencies Across Spacetime: The Geometry of Chance and Causation</a>
+        <details class="abstract inline-abstract">
+          <summary>[abstract]</summary>
+          <p>
+            Philosophical investigations into the nature of chance and causation have typically assumed classical spacetime
+            backgrounds. My dissertation argues that this practice misses important lessons. By tying chance functions to a global
+            time parameter, a structure of classical spacetimes, orthodox theories of chance cannot state important Markov-style
+            principles and fail outright in spacetimes that lack a linear time structure, for example due to closed timelike
+            curves. By contrast, the <i>urchance</i> approach, developed in the dissertation's first half, assumes no such
+            parameter, works in any spacetime geometry, captures the needed independence principles, and resolves the puzzle of
+            chances on closed timelike curves. Two general morals follow: chance is not as intimately tied to time or causation as
+            is usually thought, and chances can vary even across intrinsically duplicate trials.
+          </p>
+          <p>
+            On the causation side, counterfactualist reductions are unable to deal with <i>synchronic</i> nomic constraints:
+            law-based, yet non-causal, links between simultaneous events. These constraints occur not only in temporal-loop
+            geometries but also in common-or-garden theories like Maxwellian electrodynamics. To save the counterfactualist
+            approach to causation, its defenders must separate genuinely dynamical counterfactual influences from those produced
+            solely by synchronic constraints.
+          </p>
+        </details>
       </div>
-   </div>
+    </section>
+  </main>
 </body>
-
-
-
-
-
-
-
-
-
+</html>

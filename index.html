@@ -1,134 +1,54 @@
-<!-- THANKS TO MATT MANDELKERN FOR THE HTML/CSS TEMPLATE. (MATT CREDITS SOPHIE HOROWITZ.) -- JJ-->
-
 <!DOCTYPE html>
-
-<html>
-
+<html lang="en">
 <head>
-   <meta charset="utf-8">
-   <title>Jens Jäger</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jens Jäger</title>
+  <link rel="stylesheet" href="site.css">
 </head>
+<body>
+  <main class="page">
+    <header class="site-header">
+      <h1 class="site-title">Jens Jäger <span class="visually-hidden">(Jaeger)</span></h1>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="index.html" class="active" aria-current="page">about</a>
+        <span class="divider" aria-hidden="true">|</span>
+        <a href="research.html">research</a>
+        <span class="divider" aria-hidden="true">|</span>
+        <a href="teaching.html">teaching</a>
+      </nav>
+    </header>
 
+    <hr class="section-divider">
 
-<style type="text/css">
+    <section class="about-grid" aria-label="Profile">
+      <img src="pic.jpeg" class="profile-photo" alt="Portrait of Jens Jäger">
 
-   /* Reset default styles */
-   body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      font-family: Times New Roman, serif;
-   }
+      <div class="contact">
+        UT Austin Department of Philosophy<br>
+        2210 Speedway<br>
+        Austin, TX 78712<br>
+        <a href="mailto:jens.jaeger@austin.utexas.edu">jens.jaeger@austin.utexas.edu</a><br><br>
+        Here is my <a href="cv.pdf" target="_blank" rel="noopener noreferrer">CV</a>.
+      </div>
+    </section>
 
-   a:link, a:visited {text-decoration: none;  color: 00000}
-   a:hover{text-decoration: underline; color: 00000}
-
-   .content-wrapper {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      gap: 20px; /* Space between the list and the image */
-   }
-
-   .paper-list {
-      flex: 1; /* Allow the list to take available space */
-      min-width: 300px
-   }
-
-   .paper-image {
-      width: 280px; /* Adjust width as needed */
-      height: auto;
-   }
-
-   @media (max-width: 768px) {
-      .content-wrapper {
-         flex-direction: column; /* Stack the elements on top of each other on small screens */
-         align-items: center;
-      }
-
-      .paper-image {
-         width: 45%; 
-      }
-   }
-
-</style>
-
-
-
-<div style="font-family: Times New Roman, serif">
-   <br>
-   <div style="left: 200px; top: 37px; width:300px; position:absolute; z-index: 2; font-size: 28px">Jens Jäger <FONT COLOR="FFFFFF">(Jaeger)</FONT>
-   </div>
-
-   <div style="left: 623px; top: 40px; width:720px; position:absolute; z-index: 2; font-size: 20px; ">
-      <table border=0 width="219" cellpadding="1"> <tr>
-         <td>
-            <div class="link"><a href="index.html"><FONT COLOR="#000000">about</FONT></a></div>
-         </td> 
-         <td>
-            <div style="border-left: 2px solid black; height:23px; margin-right: 1px;"></div>
-         </td>
-         <td>
-            <div class="link"><a href="research.html"><FONT COLOR="#000CC">research</FONT></a></div>
-         </td> 
-         <td>
-            <div style="border-left: 2px solid black; height:23px; margin-left: -3px;"></div>     
-         </td>
-         <td>
-            <div class="link"><a href="teaching.html"><FONT COLOR="#000CC">teaching</FONT></a></div>
-         </td> 
-      </table>
-   </div>
-</div>
-
-
-<body link="#000CC"; vlink="#0000CC"; alink="#0000CC">
-
-
-    <div style="font-family: Times New Roman, serif;">
-
-        <hr style="position: absolute; top: 65px; left: 200px; width: 633px; height: 2px; border-width: 0px; color: black; background-color: black;">
-
-        <div style="left: 200px; width: 300px; position: absolute; top: 102px; z-index: 1;">
-            <img src="pic.jpeg" alt="" height=250px border=0px style="border: 0;" >
-        </div>
-
-        <div style="position: absolute; left: 500px; width: 300px; top: 160px; z-index: 1; font-size: 18px">
-         UT Austin Department of Philosophy
-         2210 Speedway<br>
-         Austin, TX 78712<br>
-         jens.jaeger@austin.utexas.edu<br><br>
-
-         Here is my <a href="cv.pdf" target="_blank">CV</a>.
-     </div>
-
-
- </div>
-
-
- <div style="left: 200px; top: 380px; width:633px; position:absolute; z-index: 1; font-size: 18px; text-align: justify; text-justify: inter-word;">
-    I am an assistant professor in the department of philosophy at the <a href="https://liberalarts.utexas.edu/philosophy/"  target="_blank">University of Texas at Austin</a>. I work in the philosophy of science, metaphysics, and the philosophy of physics, with particular interests in causation, chance, laws, and statistical mechanics. 
-
-    <br><br>
-
-    Before coming to UT Austin, I did my PhD at <a href="http://as.nyu.edu/philosophy.html"  target="_blank">NYU</a>, a BPhil in philosophy at <a href="https://www.philosophy.ox.ac.uk/home" target="_blank">Oxford</a>, and a BSc in physics at <a href="https://www.phys.ethz.ch/" target="_blank">ETH Zurich</a>.
-
-</div>
+    <section class="bio" aria-label="About">
+      <p>
+        I am an assistant professor in the department of philosophy at the
+        <a href="https://liberalarts.utexas.edu/philosophy/" target="_blank" rel="noopener noreferrer">University of Texas at Austin</a>.
+        I work in the philosophy of science, metaphysics, and the philosophy of physics, with particular interests in causation,
+        chance, laws, and statistical mechanics.
+      </p>
+      <p>
+        Before coming to UT Austin, I did my PhD at
+        <a href="http://as.nyu.edu/philosophy.html" target="_blank" rel="noopener noreferrer">NYU</a>,
+        a BPhil in philosophy at
+        <a href="https://www.philosophy.ox.ac.uk/home" target="_blank" rel="noopener noreferrer">Oxford</a>,
+        and a BSc in physics at
+        <a href="https://www.phys.ethz.ch/" target="_blank" rel="noopener noreferrer">ETH Zurich</a>.
+      </p>
+    </section>
+  </main>
 </body>
-
-
-
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
