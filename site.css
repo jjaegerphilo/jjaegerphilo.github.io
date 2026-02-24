@@ -82,7 +82,7 @@ a:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.55rem;
-  font-size: 1.2rem;
+  font-size: clamp(1.16rem, 1.07rem + 0.35vw, 1.28rem);
 }
 
 .site-nav a.active {
@@ -277,10 +277,6 @@ a:focus {
   .page {
     width: min(var(--page-max-width), 100% - 1.4rem);
     margin-top: 1rem;
-  }
-
-  .site-nav {
-    font-size: 1.06rem;
   }
 
   .about-grid {
