@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minkowki Spacetime</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="controls">
+      <h1>Minkowki Spacetime</h1>
+      <div class="row">
+        <label for="beta">Velocity (% of c in diagram frame)</label>
+        <input id="beta" type="range" min="-0.99" max="0.99" step="0.01" value="0" />
+        <span id="betaValue">0% of c</span>
+        <span id="gammaValue">(gamma = 1.00)</span>
+      </div>
+      <div class="row">
+        <label for="drawTool">Tool</label>
+        <select id="drawTool">
+          <option value="point">Point</option>
+          <option value="line" selected>Straight line</option>
+          <option value="eraser">Eraser</option>
+        </select>
+        <label for="strokeColor">Draw color</label>
+        <input id="strokeColor" type="color" value="#0d2e3c" />
+        <div class="actions">
+          <button id="undo" type="button">Undo Stroke</button>
+          <button id="clear" type="button">Clear</button>
+        </div>
+      </div>
+      <div class="toggle-groups">
+        <section class="toggle-panel">
+          <h2 class="panel-title">Original Frame</h2>
+          <label class="check">
+            <input id="showReferenceGrid" type="checkbox" checked />
+            Grid
+          </label>
+          <label class="check">
+            <input id="showReferenceAxisCoordinates" type="checkbox" checked />
+            Axis coordinates
+          </label>
+          <label class="check">
+            <input id="showReferencePointGuides" type="checkbox" />
+            Point guides
+          </label>
+        </section>
+        <section class="toggle-panel">
+          <h2 class="panel-title">Boosted Frame</h2>
+          <label class="check">
+            <input id="showBoostedGrid" type="checkbox" />
+            Grid
+          </label>
+          <label class="check">
+            <input id="showAxisCoordinates" type="checkbox" checked />
+            Axis coordinates
+          </label>
+          <label class="check">
+            <input id="showBoostedPointGuides" type="checkbox" />
+            Point guides
+          </label>
+        </section>
+        <section class="toggle-panel">
+          <h2 class="panel-title">Measurements</h2>
+          <label class="check">
+            <input id="showLineLengths" type="checkbox" checked />
+            Straight-line lengths
+          </label>
+          <label class="check">
+            <input id="showPointCoordinates" type="checkbox" checked />
+            Point coordinates
+          </label>
+        </section>
+        <section class="toggle-panel">
+          <h2 class="panel-title">Physics Guides</h2>
+          <label class="check">
+            <input id="showLightCones" type="checkbox" checked />
+            Light-cones
+          </label>
+          <label class="check">
+            <input id="showHyperboles" type="checkbox" />
+            Equal-distance hyperboles
+          </label>
+        </section>
+      </div>
+      <p class="hint">
+        Use Point to drop an event marker. Use Straight line by click-dragging.
+        Use Eraser to remove shapes by click or drag.
+        Hold Option while placing points or drawing lines to bypass grid snapping.
+        Use Shift+drag to reposition existing geometry.
+        Drawn geometry stays fixed in the diagram; beta changes only the indicated boosted-frame axes and grid.
+      </p>
+    </header>
+    <main class="canvas-wrap">
+      <canvas id="diagram"></canvas>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
