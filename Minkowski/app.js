@@ -4,11 +4,13 @@ const ctx = canvas.getContext("2d");
 const betaInput = document.getElementById("beta");
 const betaValue = document.getElementById("betaValue");
 const gammaValue = document.getElementById("gammaValue");
+const activeBoostInput = document.getElementById("activeBoost");
 const drawToolInput = document.getElementById("drawTool");
 const strokeColorInput = document.getElementById("strokeColor");
 const showReferenceGridInput = document.getElementById("showReferenceGrid");
 const showLightConesInput = document.getElementById("showLightCones");
 const showHyperbolesInput = document.getElementById("showHyperboles");
+const showHyperbolaPointsInput = document.getElementById("showHyperbolaPoints");
 const showAxisCoordinatesInput = document.getElementById("showAxisCoordinates");
 const showReferenceAxisCoordinatesInput = document.getElementById("showReferenceAxisCoordinates");
 const showBoostedPointGuidesInput = document.getElementById("showBoostedPointGuides");
@@ -21,12 +23,15 @@ const clearButton = document.getElementById("clear");
 
 const state = {
   beta: 0,
+  activeBoostEnabled: false,
+  activeBoostBeta: 0,
   scale: 40,
   activeTool: "line",
   strokeColor: "#0d2e3c",
   showReferenceGrid: true,
   showLightCones: true,
   showHyperboles: false,
+  showHyperbolaPoints: false,
   showAxisCoordinates: true,
   showReferenceAxisCoordinates: true,
   showBoostedPointGuides: false,
@@ -50,8 +55,21 @@ const view = {
   height: 0
 };
 
+const HYPERBOLA_LEVELS = Array.from({ length: 21 }, (_, index) => index + 1);
+const MIN_HYPERBOLA_X_EXTENT = 21;
+const HYPERBOLA_MARKER_RAPIDITY_STEP = 0.45;
+
 function gamma(beta) {
   return 1 / Math.sqrt(1 - beta * beta);
+}
+
+function clampBeta(beta) {
+  const limit = 0.999999;
+  if (!Number.isFinite(beta)) {
+    return 0;
+  }
+
+  return Math.max(-limit, Math.min(limit, beta));
 }
 
 function renderBeta() {
@@ -64,6 +82,41 @@ function lorentz(point, beta) {
     x: g * (point.x - beta * point.t),
     t: g * (point.t - beta * point.x)
   };
+}
+
+function activeBoostTransform(point, beta) {
+  return lorentz(point, -beta);
+}
+
+function relativeBoostBeta(currentBeta, targetBeta) {
+  const denominator = 1 - currentBeta * targetBeta;
+  if (Math.abs(denominator) < 1e-9) {
+    return clampBeta(targetBeta >= currentBeta ? 1 : -1);
+  }
+
+  return clampBeta((targetBeta - currentBeta) / denominator);
+}
+
+function applyActiveBoost(relativeBeta) {
+  const beta = clampBeta(relativeBeta);
+  if (Math.abs(beta) < 1e-9) {
+    return;
+  }
+
+  for (const stroke of state.strokes) {
+    stroke.points = stroke.points.map((point) => activeBoostTransform(point, beta));
+  }
+
+  if (state.lastDragPoint) {
+    state.lastDragPoint = activeBoostTransform(state.lastDragPoint, beta);
+  }
+}
+
+function syncDiagramBoostState(targetBeta) {
+  const normalizedTarget = clampBeta(targetBeta);
+  const relativeBeta = relativeBoostBeta(state.activeBoostBeta, normalizedTarget);
+  applyActiveBoost(relativeBeta);
+  state.activeBoostBeta = normalizedTarget;
 }
 
 function worldToScreen(point) {
@@ -384,6 +437,108 @@ function drawBoostedGrid() {
   ctx.restore();
 }
 
+function clipScreenSegmentToInsetRect(start, end, inset = 24) {
+  const left = inset;
+  const right = view.width - inset;
+  const top = inset;
+  const bottom = view.height - inset;
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  let t0 = 0;
+  let t1 = 1;
+
+  const checks = [
+    [-dx, start.x - left],
+    [dx, right - start.x],
+    [-dy, start.y - top],
+    [dy, bottom - start.y]
+  ];
+
+  for (const [p, q] of checks) {
+    if (Math.abs(p) < 1e-9) {
+      if (q < 0) {
+        return null;
+      }
+      continue;
+    }
+
+    const ratio = q / p;
+    if (p < 0) {
+      if (ratio > t1) {
+        return null;
+      }
+      t0 = Math.max(t0, ratio);
+    } else {
+      if (ratio < t0) {
+        return null;
+      }
+      t1 = Math.min(t1, ratio);
+    }
+  }
+
+  return {
+    start: {
+      x: start.x + dx * t0,
+      y: start.y + dy * t0
+    },
+    end: {
+      x: start.x + dx * t1,
+      y: start.y + dy * t1
+    }
+  };
+}
+
+function drawClampedAxisLabel(text, lineStart, lineEnd, options = {}) {
+  const {
+    inset = 24,
+    alongOffset = 16,
+    normalOffset = 10
+  } = options;
+  const clippedSegment = clipScreenSegmentToInsetRect(lineStart, lineEnd, inset);
+  if (!clippedSegment) {
+    return;
+  }
+
+  const dx = clippedSegment.end.x - clippedSegment.start.x;
+  const dy = clippedSegment.end.y - clippedSegment.start.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) {
+    return;
+  }
+
+  const direction = {
+    x: dx / length,
+    y: dy / length
+  };
+  const normal = {
+    x: -direction.y,
+    y: direction.x
+  };
+  const anchor = {
+    x: clippedSegment.end.x - direction.x * alongOffset + normal.x * normalOffset,
+    y: clippedSegment.end.y - direction.y * alongOffset + normal.y * normalOffset
+  };
+
+  const metrics = ctx.measureText(text);
+  const textWidth = metrics.width;
+  const ascent = metrics.actualBoundingBoxAscent || Number.parseFloat(ctx.font) || 12;
+  const descent = metrics.actualBoundingBoxDescent || ascent * 0.25;
+  const halfHeight = (ascent + descent) * 0.5;
+  const padding = inset * 0.5;
+  const x = Math.max(
+    padding + textWidth * 0.5,
+    Math.min(view.width - padding - textWidth * 0.5, anchor.x)
+  );
+  const y = Math.max(
+    padding + halfHeight,
+    Math.min(view.height - padding - halfHeight, anchor.y)
+  );
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x, y);
+}
+
 function drawAxes() {
   const { maxX, maxT } = getWorldBounds();
   const extent = Math.max(maxX, maxT) * 1.6;
@@ -436,11 +591,14 @@ function drawAxes() {
   ctx.arc(origin.x, origin.y, 2.8, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.font = "13px IBM Plex Sans, Segoe UI, sans-serif";
-  ctx.fillStyle = "#154760";
-  ctx.fillText("x", xEnd.x + 6, xEnd.y - 6);
-  ctx.fillStyle = "#66411c";
-  ctx.fillText("t", tEnd.x + 6, tEnd.y - 6);
+  const showBoostedAxisLabels = Math.abs(beta) > 1e-6;
+  if (showBoostedAxisLabels) {
+    ctx.font = "20px IBM Plex Sans, Segoe UI, sans-serif";
+    ctx.fillStyle = "#154760";
+    drawClampedAxisLabel("x'", xStart, xEnd, { alongOffset: 18, normalOffset: 12 });
+    ctx.fillStyle = "#66411c";
+    drawClampedAxisLabel("t'", tStart, tEnd, { alongOffset: 18, normalOffset: 12 });
+  }
 
   ctx.setLineDash([8, 4]);
   ctx.strokeStyle = "rgba(58, 68, 76, 0.72)";
@@ -454,9 +612,9 @@ function drawAxes() {
 
   ctx.setLineDash([]);
   ctx.fillStyle = "rgba(58, 68, 76, 0.9)";
-  ctx.font = "11px IBM Plex Sans, Segoe UI, sans-serif";
-  ctx.fillText("x0", refXEnd.x + 6, refXEnd.y + 14);
-  ctx.fillText("t0", refTEnd.x + 6, refTEnd.y + 14);
+  ctx.font = "17px IBM Plex Sans, Segoe UI, sans-serif";
+  drawClampedAxisLabel("x", refXStart, refXEnd, { alongOffset: 18, normalOffset: 12 });
+  drawClampedAxisLabel("t", refTStart, refTEnd, { alongOffset: 18, normalOffset: 12 });
   ctx.restore();
 }
 
@@ -630,15 +788,15 @@ function plotWorldCurve(samples, color, width = 1.1, dash = []) {
 
 function drawHyperboles() {
   const { maxX, maxT } = getWorldBounds();
-  const levels = [1, 2, 3, 4, 5, 6, 7, 8];
+  const xExtent = Math.max(maxX * 1.1, MIN_HYPERBOLA_X_EXTENT);
   const dx = 0.04;
   const dt = 0.04;
 
-  for (const a of levels) {
+  for (const a of HYPERBOLA_LEVELS) {
     const timelikeTop = [];
     const timelikeBottom = [];
 
-    for (let x = -maxX * 1.1; x <= maxX * 1.1; x += dx) {
+    for (let x = -xExtent; x <= xExtent; x += dx) {
       const t = Math.sqrt(a * a + x * x);
       timelikeTop.push({ x, t });
       timelikeBottom.push({ x, t: -t });
@@ -649,8 +807,10 @@ function drawHyperboles() {
 
     const spacelikeRight = [];
     const spacelikeLeft = [];
+    const requiredTExtent = Math.sqrt(Math.max(0, xExtent * xExtent - a * a));
+    const tExtent = Math.max(maxT * 1.1, requiredTExtent);
 
-    for (let t = -maxT * 1.1; t <= maxT * 1.1; t += dt) {
+    for (let t = -tExtent; t <= tExtent; t += dt) {
       const x = Math.sqrt(a * a + t * t);
       spacelikeRight.push({ x, t });
       spacelikeLeft.push({ x: -x, t });
@@ -659,6 +819,88 @@ function drawHyperboles() {
     plotWorldCurve(spacelikeRight, "#49a35e", 1, [4, 4]);
     plotWorldCurve(spacelikeLeft, "#49a35e", 1, [4, 4]);
   }
+}
+
+function getHyperbolaMarkerRapidities(xExtent) {
+  const minLevel = HYPERBOLA_LEVELS[0] ?? 1;
+  const etaMax = Math.asinh(xExtent / Math.max(minLevel, 1e-6));
+  const sampleCount = Math.max(1, Math.ceil(etaMax / HYPERBOLA_MARKER_RAPIDITY_STEP));
+  const rapidities = [];
+
+  for (let i = -sampleCount; i <= sampleCount; i += 1) {
+    rapidities.push((i / sampleCount) * etaMax);
+  }
+
+  return rapidities;
+}
+
+function getHyperbolaMarkerData() {
+  const markers = [];
+  const boostBeta = state.activeBoostBeta;
+  const { maxX } = getWorldBounds();
+  const xExtent = Math.max(maxX * 1.1, MIN_HYPERBOLA_X_EXTENT);
+  const rayRapidities = getHyperbolaMarkerRapidities(xExtent);
+
+  for (const level of HYPERBOLA_LEVELS) {
+    // Shared rapidity samples make the marker families align along rays from the origin.
+    for (const eta of rayRapidities) {
+      const sinhEta = Math.sinh(eta);
+      const coshEta = Math.cosh(eta);
+      const timelikePoints = [
+        { x: level * sinhEta, t: level * coshEta },
+        { x: level * sinhEta, t: -level * coshEta }
+      ];
+
+      for (const point of timelikePoints) {
+        markers.push({
+          point: activeBoostTransform(point, boostBeta),
+          color: "#1a87a7"
+        });
+      }
+
+      const spacelikePoints = [
+        { x: level * coshEta, t: level * sinhEta },
+        { x: -level * coshEta, t: level * sinhEta }
+      ];
+
+      for (const point of spacelikePoints) {
+        markers.push({
+          point: activeBoostTransform(point, boostBeta),
+          color: "#49a35e"
+        });
+      }
+    }
+  }
+
+  return markers;
+}
+
+function drawHyperbolaPoints() {
+  const markers = getHyperbolaMarkerData();
+
+  ctx.save();
+  ctx.lineWidth = 1;
+
+  for (const marker of markers) {
+    const screenPoint = worldToScreen(marker.point);
+    if (
+      screenPoint.x < -8 ||
+      screenPoint.y < -8 ||
+      screenPoint.x > view.width + 8 ||
+      screenPoint.y > view.height + 8
+    ) {
+      continue;
+    }
+
+    ctx.fillStyle = marker.color;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
+    ctx.beginPath();
+    ctx.arc(screenPoint.x, screenPoint.y, 2.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 function drawStrokes() {
@@ -922,8 +1164,22 @@ function drawOverlay() {
   const g = gamma(state.beta);
   ctx.fillStyle = "rgba(14, 25, 32, 0.82)";
   ctx.font = "12px IBM Plex Sans, Segoe UI, sans-serif";
-  ctx.fillText(`v = ${formatVelocityPercent(state.beta)} of c`, 12, view.height - 26);
-  ctx.fillText(`gamma = ${g.toFixed(3)}`, 12, view.height - 10);
+  const lines = [
+    `frame v = ${formatVelocityPercent(state.beta)} of c`,
+    `gamma = ${g.toFixed(3)}`
+  ];
+
+  if (state.activeBoostEnabled) {
+    lines.unshift(`geometry v = ${formatVelocityPercent(state.activeBoostBeta)} of c (live)`);
+  } else if (Math.abs(state.activeBoostBeta) > 1e-6) {
+    lines.unshift(`geometry v = ${formatVelocityPercent(state.activeBoostBeta)} of c`);
+  }
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const y = view.height - 10 - (lines.length - 1 - i) * 16;
+    ctx.fillText(lines[i], 12, y);
+  }
+
   ctx.restore();
 }
 
@@ -942,6 +1198,9 @@ function draw() {
     drawLightCones();
   }
   drawAxes();
+  if (state.showHyperbolaPoints) {
+    drawHyperbolaPoints();
+  }
   if (state.showReferencePointGuides) {
     drawReferencePointGuides();
   }
@@ -1225,8 +1484,19 @@ function isEditableElement(element) {
 }
 
 betaInput.addEventListener("input", () => {
-  state.beta = Number.parseFloat(betaInput.value);
+  state.beta = clampBeta(Number.parseFloat(betaInput.value));
+  if (state.activeBoostEnabled) {
+    syncDiagramBoostState(state.beta);
+  }
   syncVelocityLabels();
+  draw();
+});
+
+activeBoostInput.addEventListener("change", () => {
+  state.activeBoostEnabled = activeBoostInput.checked;
+  if (state.activeBoostEnabled) {
+    syncDiagramBoostState(state.beta);
+  }
   draw();
 });
 
@@ -1242,6 +1512,11 @@ showLightConesInput.addEventListener("change", () => {
 
 showHyperbolesInput.addEventListener("change", () => {
   state.showHyperboles = showHyperbolesInput.checked;
+  draw();
+});
+
+showHyperbolaPointsInput.addEventListener("change", () => {
+  state.showHyperbolaPoints = showHyperbolaPointsInput.checked;
   draw();
 });
 
@@ -1319,6 +1594,8 @@ canvas.addEventListener("pointercancel", endStroke);
 window.addEventListener("resize", resizeCanvas);
 
 drawToolInput.value = state.activeTool;
+activeBoostInput.checked = state.activeBoostEnabled;
+showHyperbolaPointsInput.checked = state.showHyperbolaPoints;
 syncToolControls();
 syncVelocityLabels();
 resizeCanvas();

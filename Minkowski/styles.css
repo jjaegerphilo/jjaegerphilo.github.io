@@ -86,6 +86,13 @@ select {
   font-size: 0.95rem;
 }
 
+.slider-toggle {
+  padding: 0.24rem 0.58rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
 .toggle-groups {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -150,6 +157,7 @@ button:hover {
   flex: 1;
   min-height: 420px;
   padding: 0.4rem;
+  position: relative;
 }
 
 #diagram {
@@ -160,4 +168,34 @@ button:hover {
   border-radius: 8px;
   background: white;
   touch-action: none;
+}
+
+.formula-badge {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.38rem;
+  border: 1px solid rgba(210, 216, 221, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px rgba(20, 34, 45, 0.08);
+  color: var(--ink);
+  font-size: 0.64rem;
+  line-height: 1;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+}
+
+.formula-badge math {
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.formula-badge math mi,
+.formula-badge math mn,
+.formula-badge math mo {
+  color: var(--ink);
 }

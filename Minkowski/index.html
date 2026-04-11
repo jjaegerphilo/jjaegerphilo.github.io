@@ -15,6 +15,10 @@
         <input id="beta" type="range" min="-0.99" max="0.99" step="0.01" value="0" />
         <span id="betaValue">0% of c</span>
         <span id="gammaValue">(gamma = 1.00)</span>
+        <label class="check slider-toggle" for="activeBoost">
+          <input id="activeBoost" type="checkbox" />
+          Boost geometry
+        </label>
       </div>
       <div class="row">
         <label for="drawTool">Tool</label>
@@ -82,6 +86,10 @@
             <input id="showHyperboles" type="checkbox" />
             Equal-distance hyperboles
           </label>
+          <label class="check">
+            <input id="showHyperbolaPoints" type="checkbox" />
+            Hyperbola points
+          </label>
         </section>
       </div>
       <p class="hint">
@@ -89,11 +97,61 @@
         Use Eraser to remove shapes by click or drag.
         Hold Option while placing points or drawing lines to bypass grid snapping.
         Use Shift+drag to reposition existing geometry.
-        Drawn geometry stays fixed in the diagram; beta changes only the indicated boosted-frame axes and grid.
+        With Boost geometry off, beta changes only the indicated boosted-frame axes and grid.
+        Turn it on to Lorentz-accelerate the drawn events themselves.
+        Hyperbola points mark sample events on the equal-distance curves and slide along them under geometry boosts.
       </p>
     </header>
     <main class="canvas-wrap">
       <canvas id="diagram"></canvas>
+      <div class="formula-badge" aria-label="Minkowski interval reminder">
+        <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline" aria-label="d of p comma q equals the square root of t sub p minus t sub q squared minus x sub p minus x sub q squared">
+          <mi>d</mi>
+          <mo stretchy="false">(</mo>
+          <mi>p</mi>
+          <mo>,</mo>
+          <mi>q</mi>
+          <mo stretchy="false">)</mo>
+          <mo>=</mo>
+          <msqrt>
+            <mrow>
+              <msup>
+                <mrow>
+                  <mo>(</mo>
+                  <msub>
+                    <mi>t</mi>
+                    <mi>p</mi>
+                  </msub>
+                  <mo>&#x2212;</mo>
+                  <msub>
+                    <mi>t</mi>
+                    <mi>q</mi>
+                  </msub>
+                  <mo>)</mo>
+                </mrow>
+                <mn>2</mn>
+              </msup>
+              <mo>&#x2212;</mo>
+              <msup>
+                <mrow>
+                  <mo>(</mo>
+                  <msub>
+                    <mi>x</mi>
+                    <mi>p</mi>
+                  </msub>
+                  <mo>&#x2212;</mo>
+                  <msub>
+                    <mi>x</mi>
+                    <mi>q</mi>
+                  </msub>
+                  <mo>)</mo>
+                </mrow>
+                <mn>2</mn>
+              </msup>
+            </mrow>
+          </msqrt>
+        </math>
+      </div>
     </main>
   </div>
   <script src="app.js"></script>
