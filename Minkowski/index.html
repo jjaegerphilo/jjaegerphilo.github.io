@@ -10,6 +10,7 @@
   <div class="app">
     <header class="controls">
       <h1>Minkowki Spacetime</h1>
+      <div id="lastUpdated" class="last-updated" aria-live="polite"></div>
       <div class="row">
         <label for="drawTool">Tool</label>
         <select id="drawTool">
@@ -121,6 +122,7 @@
           id="tutorialTrigger"
           type="button"
           class="tutorial-trigger"
+          aria-controls="tutorialPanel"
           aria-describedby="tutorialPanel"
           aria-expanded="false"
         >

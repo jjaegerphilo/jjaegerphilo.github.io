@@ -30,6 +30,7 @@ body {
 }
 
 .controls {
+  position: relative;
   padding: 0.72rem 0.9rem 0.1rem;
   background: linear-gradient(180deg, #ffffff, #f9fafb);
   border-bottom: 1px solid var(--line);
@@ -39,6 +40,17 @@ body {
   margin: 0 0 0.6rem;
   font-size: 1.1rem;
   letter-spacing: 0.02em;
+}
+
+.last-updated {
+  position: absolute;
+  top: 0.76rem;
+  right: 0.9rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  text-align: right;
+  pointer-events: none;
 }
 
 .row {
@@ -204,12 +216,18 @@ button:hover {
 
 .tutorial-popover {
   position: relative;
-  display: inline-flex;
+  display: inline-flex !important;
   align-items: flex-start;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.15rem;
+  padding-bottom: 0.35rem;
+  z-index: 5;
+  pointer-events: auto !important;
 }
 
 .tutorial-trigger {
+  display: inline-block !important;
+  position: relative;
+  z-index: 6;
   border: none;
   background: none;
   color: var(--accent);
@@ -218,6 +236,10 @@ button:hover {
   font-size: 0.9rem;
   text-decoration: underline dotted;
   text-underline-offset: 0.16rem;
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: auto !important;
+  user-select: none;
 }
 
 .tutorial-trigger:hover {
@@ -233,7 +255,7 @@ button:hover {
 
 .tutorial-panel {
   position: absolute;
-  top: calc(100% + 0.35rem);
+  top: 100%;
   left: 0;
   width: min(42rem, calc(100vw - 2rem));
   margin: 0;
@@ -248,7 +270,7 @@ button:hover {
   transform: translateY(-4px);
   transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
   pointer-events: none;
-  z-index: 4;
+  z-index: 7;
 }
 
 .tutorial-panel[hidden] {

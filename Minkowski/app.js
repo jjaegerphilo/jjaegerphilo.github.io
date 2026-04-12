@@ -28,6 +28,7 @@ const undoButton = document.getElementById("undo");
 const clearButton = document.getElementById("clear");
 const copyDiagramButton = document.getElementById("copyDiagram");
 const copyDiagramStatus = document.getElementById("copyDiagramStatus");
+const lastUpdatedNote = document.getElementById("lastUpdated");
 const tutorialPopover = document.querySelector(".tutorial-popover");
 const tutorialTrigger = document.getElementById("tutorialTrigger");
 const tutorialPanel = document.getElementById("tutorialPanel");
@@ -257,6 +258,27 @@ function getWorldBounds() {
   };
 }
 
+function getBoostedFrameBounds() {
+  const corners = [
+    { x: 0, y: 0 },
+    { x: view.width, y: 0 },
+    { x: 0, y: view.height },
+    { x: view.width, y: view.height }
+  ].map((corner) => lorentz(screenToWorld(corner), state.beta));
+
+  let maxX = 0;
+  let maxT = 0;
+  for (const corner of corners) {
+    maxX = Math.max(maxX, Math.abs(corner.x));
+    maxT = Math.max(maxT, Math.abs(corner.t));
+  }
+
+  return {
+    maxX,
+    maxT
+  };
+}
+
 function setCopyDiagramStatus(message, options = {}) {
   const { isError = false, persist = false } = options;
   if (!copyDiagramStatus) {
@@ -286,6 +308,24 @@ function canvasToBlob(sourceCanvas, type = "image/png") {
   return new Promise((resolve) => {
     sourceCanvas.toBlob((blob) => resolve(blob), type);
   });
+}
+
+function syncLastUpdatedNote() {
+  if (!lastUpdatedNote) {
+    return;
+  }
+
+  const rawLastModified = document.lastModified;
+  const parsedDate = rawLastModified ? new Date(rawLastModified) : null;
+  if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+    lastUpdatedNote.textContent = "";
+    return;
+  }
+
+  const formattedDate = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium"
+  }).format(parsedDate);
+  lastUpdatedNote.textContent = `Last updated: ${formattedDate}`;
 }
 
 function setTutorialOpen(isOpen) {
@@ -714,16 +754,18 @@ function drawGrid() {
 }
 
 function drawBoostedGrid() {
-  const { maxX, maxT } = getWorldBounds();
-  const extent = Math.max(maxX, maxT) * 3;
-  const gridLimit = Math.ceil(extent);
-  const beta = renderBeta();
+  const { maxX, maxT } = getBoostedFrameBounds();
+  const xExtent = Math.max(maxX * 1.35, 2);
+  const tExtent = Math.max(maxT * 1.35, 2);
+  const xGridLimit = Math.ceil(xExtent);
+  const tGridLimit = Math.ceil(tExtent);
+  const betaToWorld = renderBeta();
 
   ctx.save();
 
-  for (let t = -gridLimit; t <= gridLimit; t += 1) {
-    const start = worldToScreen(lorentz({ x: -extent, t }, beta));
-    const end = worldToScreen(lorentz({ x: extent, t }, beta));
+  for (let t = -tGridLimit; t <= tGridLimit; t += 1) {
+    const start = worldToScreen(lorentz({ x: -xExtent, t }, betaToWorld));
+    const end = worldToScreen(lorentz({ x: xExtent, t }, betaToWorld));
     const isMajor = t % 5 === 0;
     ctx.strokeStyle = isMajor ? "rgba(21, 71, 96, 0.18)" : "rgba(21, 71, 96, 0.10)";
     ctx.lineWidth = isMajor ? 1 : 0.8;
@@ -733,9 +775,9 @@ function drawBoostedGrid() {
     ctx.stroke();
   }
 
-  for (let x = -gridLimit; x <= gridLimit; x += 1) {
-    const start = worldToScreen(lorentz({ x, t: -extent }, beta));
-    const end = worldToScreen(lorentz({ x, t: extent }, beta));
+  for (let x = -xGridLimit; x <= xGridLimit; x += 1) {
+    const start = worldToScreen(lorentz({ x, t: -tExtent }, betaToWorld));
+    const end = worldToScreen(lorentz({ x, t: tExtent }, betaToWorld));
     const isMajor = x % 5 === 0;
     ctx.strokeStyle = isMajor ? "rgba(102, 65, 28, 0.18)" : "rgba(102, 65, 28, 0.10)";
     ctx.lineWidth = isMajor ? 1 : 0.8;
@@ -2004,6 +2046,10 @@ tutorialPopover?.addEventListener("focusout", (event) => {
   setTutorialOpen(false);
 });
 
+tutorialTrigger?.addEventListener("pointerdown", (event) => {
+  event.stopPropagation();
+});
+
 tutorialTrigger?.addEventListener("click", () => {
   setTutorialOpen(tutorialPanel?.hidden ?? true);
 });
@@ -2042,6 +2088,7 @@ clipToHyperbolaeInput.checked = state.clipToHyperbolae;
 showHyperbolaPointsInput.checked = state.showHyperbolaPoints;
 hideAxesAndLinesInput.checked = state.hideAxesAndLines;
 syncToolControls();
+syncLastUpdatedNote();
 syncVelocityLabels();
 syncRectifyControls();
 syncHyperbolaClipControls();
