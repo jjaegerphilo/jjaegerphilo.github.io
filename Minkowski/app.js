@@ -1785,7 +1785,10 @@ function syncRectifyControls() {
 }
 
 function syncHyperbolaClipControls() {
-  hyperbolaClipLabel.hidden = !state.showHyperboles;
+  const shouldShow = state.showHyperboles;
+  hyperbolaClipLabel.classList.toggle("is-hidden", !shouldShow);
+  hyperbolaClipLabel.hidden = !shouldShow;
+  hyperbolaClipLabel.setAttribute("aria-hidden", shouldShow ? "false" : "true");
   clipToHyperbolaeInput.disabled = !state.showHyperboles;
 }
 

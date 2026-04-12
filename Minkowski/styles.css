@@ -173,6 +173,13 @@ select {
 .inline-check-row .check {
   margin-bottom: 0;
   flex: 0 0 auto;
+  display: inline-flex !important;
+  width: auto !important;
+  white-space: nowrap;
+}
+
+.clip-toggle.is-hidden {
+  display: none !important;
 }
 
 button {
