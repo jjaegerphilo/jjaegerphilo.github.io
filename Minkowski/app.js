@@ -4,7 +4,6 @@ const ctx = canvas.getContext("2d");
 const betaInput = document.getElementById("beta");
 const betaValue = document.getElementById("betaValue");
 const gammaValue = document.getElementById("gammaValue");
-const activeBoostInput = document.getElementById("activeBoost");
 const rectifyViewInput = document.getElementById("rectifyView");
 const rectifyRow = document.getElementById("rectifyRow");
 const rectifyAmountInput = document.getElementById("rectifyAmount");
@@ -29,11 +28,12 @@ const undoButton = document.getElementById("undo");
 const clearButton = document.getElementById("clear");
 const copyDiagramButton = document.getElementById("copyDiagram");
 const copyDiagramStatus = document.getElementById("copyDiagramStatus");
+const tutorialPopover = document.querySelector(".tutorial-popover");
+const tutorialTrigger = document.getElementById("tutorialTrigger");
+const tutorialPanel = document.getElementById("tutorialPanel");
 
 const state = {
   beta: 0,
-  activeBoostEnabled: false,
-  activeBoostBeta: 0,
   rectifyViewEnabled: false,
   rectifyAmount: 0,
   scale: 40,
@@ -119,41 +119,6 @@ function lorentz(point, beta) {
     x: g * (point.x - beta * point.t),
     t: g * (point.t - beta * point.x)
   };
-}
-
-function activeBoostTransform(point, beta) {
-  return lorentz(point, -beta);
-}
-
-function relativeBoostBeta(currentBeta, targetBeta) {
-  const denominator = 1 - currentBeta * targetBeta;
-  if (Math.abs(denominator) < 1e-9) {
-    return clampBeta(targetBeta >= currentBeta ? 1 : -1);
-  }
-
-  return clampBeta((targetBeta - currentBeta) / denominator);
-}
-
-function applyActiveBoost(relativeBeta) {
-  const beta = clampBeta(relativeBeta);
-  if (Math.abs(beta) < 1e-9) {
-    return;
-  }
-
-  for (const stroke of state.strokes) {
-    stroke.points = stroke.points.map((point) => activeBoostTransform(point, beta));
-  }
-
-  if (state.lastDragPoint) {
-    state.lastDragPoint = activeBoostTransform(state.lastDragPoint, beta);
-  }
-}
-
-function syncDiagramBoostState(targetBeta) {
-  const normalizedTarget = clampBeta(targetBeta);
-  const relativeBeta = relativeBoostBeta(state.activeBoostBeta, normalizedTarget);
-  applyActiveBoost(relativeBeta);
-  state.activeBoostBeta = normalizedTarget;
 }
 
 function getDisplayTransformMatrixForAmount(amount) {
@@ -321,6 +286,16 @@ function canvasToBlob(sourceCanvas, type = "image/png") {
   return new Promise((resolve) => {
     sourceCanvas.toBlob((blob) => resolve(blob), type);
   });
+}
+
+function setTutorialOpen(isOpen) {
+  if (!tutorialPopover || !tutorialTrigger || !tutorialPanel) {
+    return;
+  }
+
+  tutorialPopover.classList.toggle("is-open", isOpen);
+  tutorialPanel.hidden = !isOpen;
+  tutorialTrigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
 }
 
 async function copyDiagramToClipboard() {
@@ -1172,7 +1147,6 @@ function getHyperbolaMarkerRapidities(xExtent) {
 
 function getHyperbolaMarkerData() {
   const markers = [];
-  const boostBeta = state.activeBoostBeta;
   const { xExtent, tExtent } = getStableHyperbolaExtents();
   const rayRapidities = getHyperbolaMarkerRapidities(xExtent);
 
@@ -1188,7 +1162,7 @@ function getHyperbolaMarkerData() {
 
       for (const point of timelikePoints) {
         markers.push({
-          point: activeBoostTransform(point, boostBeta),
+          point,
           color: "#1a87a7"
         });
       }
@@ -1200,7 +1174,7 @@ function getHyperbolaMarkerData() {
 
       for (const point of spacelikePoints) {
         markers.push({
-          point: activeBoostTransform(point, boostBeta),
+          point,
           color: "#49a35e"
         });
       }
@@ -1220,7 +1194,7 @@ function getHyperbolaMarkerData() {
 
     for (const point of lightConePoints) {
       markers.push({
-        point: activeBoostTransform(point, boostBeta),
+        point,
         color: "#dc3a4a"
       });
     }
@@ -1528,12 +1502,6 @@ function drawOverlay() {
     `gamma = ${g.toFixed(3)}`
   ];
 
-  if (state.activeBoostEnabled) {
-    lines.unshift(`geometry v = ${formatVelocityPercent(state.activeBoostBeta)} of c (live)`);
-  } else if (Math.abs(state.activeBoostBeta) > 1e-6) {
-    lines.unshift(`geometry v = ${formatVelocityPercent(state.activeBoostBeta)} of c`);
-  }
-
   if (state.rectifyViewEnabled) {
     lines.unshift(`view rectification = ${Math.round(state.rectifyAmount * 100)}%`);
   }
@@ -1795,9 +1763,6 @@ function clampBetaToControlRange(beta) {
 
 function syncBetaDrivenState() {
   betaInput.value = String(state.beta);
-  if (state.activeBoostEnabled) {
-    syncDiagramBoostState(state.beta);
-  }
   syncVelocityLabels();
   draw();
 }
@@ -1914,14 +1879,6 @@ gammaValue.addEventListener("change", () => {
   syncBetaDrivenState();
 });
 
-activeBoostInput.addEventListener("change", () => {
-  state.activeBoostEnabled = activeBoostInput.checked;
-  if (state.activeBoostEnabled) {
-    syncDiagramBoostState(state.beta);
-  }
-  draw();
-});
-
 rectifyViewInput.addEventListener("change", () => {
   state.rectifyViewEnabled = rectifyViewInput.checked;
   syncRectifyControls();
@@ -2025,6 +1982,37 @@ copyDiagramButton.addEventListener("click", () => {
   copyDiagramToClipboard();
 });
 
+tutorialPopover?.addEventListener("mouseenter", () => {
+  setTutorialOpen(true);
+});
+
+tutorialPopover?.addEventListener("mouseleave", () => {
+  setTutorialOpen(false);
+});
+
+tutorialPopover?.addEventListener("focusin", () => {
+  setTutorialOpen(true);
+});
+
+tutorialPopover?.addEventListener("focusout", (event) => {
+  if (tutorialPopover.contains(event.relatedTarget)) {
+    return;
+  }
+  setTutorialOpen(false);
+});
+
+tutorialTrigger?.addEventListener("click", () => {
+  setTutorialOpen(tutorialPanel?.hidden ?? true);
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!tutorialPopover || tutorialPanel?.hidden || tutorialPopover.contains(event.target)) {
+    return;
+  }
+
+  setTutorialOpen(false);
+});
+
 window.addEventListener("keydown", (event) => {
   const isDeleteKey = event.key === "Backspace" || event.key === "Delete";
   if (!isDeleteKey) {
@@ -2046,7 +2034,6 @@ canvas.addEventListener("pointercancel", endStroke);
 window.addEventListener("resize", resizeCanvas);
 
 drawToolInput.value = state.activeTool;
-activeBoostInput.checked = state.activeBoostEnabled;
 rectifyViewInput.checked = state.rectifyViewEnabled;
 clipToHyperbolaeInput.checked = state.clipToHyperbolae;
 showHyperbolaPointsInput.checked = state.showHyperbolaPoints;

@@ -106,10 +106,6 @@
           <span>γ</span>
           <input id="gammaValue" type="number" min="1" step="0.01" value="1.00" />
         </label>
-        <label class="check slider-toggle" for="activeBoost">
-          <input id="activeBoost" type="checkbox" />
-          Boost geometry
-        </label>
         <label class="check slider-toggle" for="rectifyView">
           <input id="rectifyView" type="checkbox" />
           Rectify view
@@ -121,17 +117,23 @@
         <span id="rectifyValue">0%</span>
       </div>
       <div class="tutorial-popover">
-        <button type="button" class="tutorial-trigger" aria-describedby="tutorialPanel">Tutorial</button>
-        <p id="tutorialPanel" class="hint tutorial-panel" role="note">
+        <button
+          id="tutorialTrigger"
+          type="button"
+          class="tutorial-trigger"
+          aria-describedby="tutorialPanel"
+          aria-expanded="false"
+        >
+          Tutorial
+        </button>
+        <p id="tutorialPanel" class="hint tutorial-panel" role="note" hidden>
           Use Point to drop an event marker. Use Straight line by click-dragging.
           Use Eraser to remove shapes by click or drag.
           Hold Option while placing points or drawing lines to bypass grid snapping.
           Use Shift+drag to reposition existing geometry.
-          With Boost geometry off, beta changes only the indicated boosted-frame axes and grid.
-          Turn it on to Lorentz-accelerate the drawn events themselves.
           Rectify view slides the page rendering from reference-orthogonal to boosted-orthogonal without changing the relative velocity.
           With Equal-distance hyperboles on, Clip snaps line endpoints to the nearest displayed hyperbola.
-          Hyperbola points mark sample events on the equal-distance curves and light cones, and slide along them under geometry boosts.
+          Hyperbola points mark sample events on the equal-distance curves and light cones.
           Hide axes &amp; drawn lines temporarily clears the frame axes and user-drawn line segments without deleting them.
         </p>
       </div>
