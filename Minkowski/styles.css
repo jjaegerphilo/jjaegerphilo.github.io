@@ -49,11 +49,26 @@ body {
   margin-bottom: 0.35rem;
 }
 
+.row[hidden] {
+  display: none !important;
+}
+
 .actions {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.action-status {
+  min-width: 4.5rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.action-status.error {
+  color: #b33b42;
 }
 
 input[type="range"] {
@@ -93,6 +108,27 @@ select {
   background: rgba(255, 255, 255, 0.9);
 }
 
+.inline-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.18rem 0.38rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+}
+
+.inline-number input {
+  width: 4.8rem;
+  border: 1px solid #b8c2c9;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.18rem 0.32rem;
+}
+
 .toggle-groups {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -126,6 +162,19 @@ select {
   margin-bottom: 0;
 }
 
+.inline-check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.18rem;
+  flex-wrap: nowrap;
+}
+
+.inline-check-row .check {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+
 button {
   border: 1px solid #b8c2c9;
   background: white;
@@ -144,6 +193,62 @@ button:hover {
   margin: 0 0 0.5rem;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.tutorial-popover {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.tutorial-trigger {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.16rem;
+}
+
+.tutorial-trigger:hover {
+  background: none;
+  color: #085f6f;
+}
+
+.tutorial-trigger:focus-visible {
+  outline: 2px solid rgba(13, 122, 141, 0.3);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tutorial-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: min(42rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 12px 24px rgba(20, 34, 45, 0.12);
+  line-height: 1.45;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.tutorial-popover:hover .tutorial-panel,
+.tutorial-popover:focus-within .tutorial-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 @media (max-width: 720px) {

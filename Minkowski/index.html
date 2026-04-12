@@ -11,16 +11,6 @@
     <header class="controls">
       <h1>Minkowki Spacetime</h1>
       <div class="row">
-        <label for="beta">Velocity (% of c in diagram frame)</label>
-        <input id="beta" type="range" min="-0.99" max="0.99" step="0.01" value="0" />
-        <span id="betaValue">0% of c</span>
-        <span id="gammaValue">(gamma = 1.00)</span>
-        <label class="check slider-toggle" for="activeBoost">
-          <input id="activeBoost" type="checkbox" />
-          Boost geometry
-        </label>
-      </div>
-      <div class="row">
         <label for="drawTool">Tool</label>
         <select id="drawTool">
           <option value="point">Point</option>
@@ -32,6 +22,8 @@
         <div class="actions">
           <button id="undo" type="button">Undo Stroke</button>
           <button id="clear" type="button">Clear</button>
+          <button id="copyDiagram" type="button">Copy diagram</button>
+          <span id="copyDiagramStatus" class="action-status" aria-live="polite"></span>
         </div>
       </div>
       <div class="toggle-groups">
@@ -75,6 +67,10 @@
             <input id="showPointCoordinates" type="checkbox" checked />
             Point coordinates
           </label>
+          <label class="check">
+            <input id="hideAxesAndLines" type="checkbox" />
+            Hide axes &amp; drawn lines
+          </label>
         </section>
         <section class="toggle-panel">
           <h2 class="panel-title">Physics Guides</h2>
@@ -82,25 +78,63 @@
             <input id="showLightCones" type="checkbox" checked />
             Light-cones
           </label>
-          <label class="check">
-            <input id="showHyperboles" type="checkbox" />
-            Equal-distance hyperboles
-          </label>
+          <div class="inline-check-row">
+            <label class="check">
+              <input id="showHyperboles" type="checkbox" />
+              Equal-distance hyperboles
+            </label>
+            <label id="hyperbolaClipLabel" class="check" hidden>
+              <input id="clipToHyperbolae" type="checkbox" />
+              Clip
+            </label>
+          </div>
           <label class="check">
             <input id="showHyperbolaPoints" type="checkbox" />
             Hyperbola points
           </label>
         </section>
       </div>
-      <p class="hint">
-        Use Point to drop an event marker. Use Straight line by click-dragging.
-        Use Eraser to remove shapes by click or drag.
-        Hold Option while placing points or drawing lines to bypass grid snapping.
-        Use Shift+drag to reposition existing geometry.
-        With Boost geometry off, beta changes only the indicated boosted-frame axes and grid.
-        Turn it on to Lorentz-accelerate the drawn events themselves.
-        Hyperbola points mark sample events on the equal-distance curves and slide along them under geometry boosts.
-      </p>
+      <div class="row">
+        <label for="beta">Relative velocity between frames (% of c)</label>
+        <input id="beta" type="range" min="-0.99" max="0.99" step="0.01" value="0" />
+        <label class="inline-number" for="betaValue">
+          <span>c</span>
+          <input id="betaValue" type="number" min="-99" max="99" step="1" value="0" />
+          <span>%</span>
+        </label>
+        <label class="inline-number" for="gammaValue">
+          <span>γ</span>
+          <input id="gammaValue" type="number" min="1" step="0.01" value="1.00" />
+        </label>
+        <label class="check slider-toggle" for="activeBoost">
+          <input id="activeBoost" type="checkbox" />
+          Boost geometry
+        </label>
+        <label class="check slider-toggle" for="rectifyView">
+          <input id="rectifyView" type="checkbox" />
+          Rectify view
+        </label>
+      </div>
+      <div id="rectifyRow" class="row" hidden>
+        <label for="rectifyAmount">Rectification</label>
+        <input id="rectifyAmount" type="range" min="0" max="1" step="0.01" value="0" />
+        <span id="rectifyValue">0%</span>
+      </div>
+      <div class="tutorial-popover">
+        <button type="button" class="tutorial-trigger" aria-describedby="tutorialPanel">Tutorial</button>
+        <p id="tutorialPanel" class="hint tutorial-panel" role="note">
+          Use Point to drop an event marker. Use Straight line by click-dragging.
+          Use Eraser to remove shapes by click or drag.
+          Hold Option while placing points or drawing lines to bypass grid snapping.
+          Use Shift+drag to reposition existing geometry.
+          With Boost geometry off, beta changes only the indicated boosted-frame axes and grid.
+          Turn it on to Lorentz-accelerate the drawn events themselves.
+          Rectify view slides the page rendering from reference-orthogonal to boosted-orthogonal without changing the relative velocity.
+          With Equal-distance hyperboles on, Clip snaps line endpoints to the nearest displayed hyperbola.
+          Hyperbola points mark sample events on the equal-distance curves and light cones, and slide along them under geometry boosts.
+          Hide axes &amp; drawn lines temporarily clears the frame axes and user-drawn line segments without deleting them.
+        </p>
+      </div>
     </header>
     <main class="canvas-wrap">
       <canvas id="diagram"></canvas>

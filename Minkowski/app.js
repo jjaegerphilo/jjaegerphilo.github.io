@@ -5,11 +5,17 @@ const betaInput = document.getElementById("beta");
 const betaValue = document.getElementById("betaValue");
 const gammaValue = document.getElementById("gammaValue");
 const activeBoostInput = document.getElementById("activeBoost");
+const rectifyViewInput = document.getElementById("rectifyView");
+const rectifyRow = document.getElementById("rectifyRow");
+const rectifyAmountInput = document.getElementById("rectifyAmount");
+const rectifyValue = document.getElementById("rectifyValue");
 const drawToolInput = document.getElementById("drawTool");
 const strokeColorInput = document.getElementById("strokeColor");
 const showReferenceGridInput = document.getElementById("showReferenceGrid");
 const showLightConesInput = document.getElementById("showLightCones");
 const showHyperbolesInput = document.getElementById("showHyperboles");
+const hyperbolaClipLabel = document.getElementById("hyperbolaClipLabel");
+const clipToHyperbolaeInput = document.getElementById("clipToHyperbolae");
 const showHyperbolaPointsInput = document.getElementById("showHyperbolaPoints");
 const showAxisCoordinatesInput = document.getElementById("showAxisCoordinates");
 const showReferenceAxisCoordinatesInput = document.getElementById("showReferenceAxisCoordinates");
@@ -17,20 +23,26 @@ const showBoostedPointGuidesInput = document.getElementById("showBoostedPointGui
 const showReferencePointGuidesInput = document.getElementById("showReferencePointGuides");
 const showLineLengthsInput = document.getElementById("showLineLengths");
 const showPointCoordinatesInput = document.getElementById("showPointCoordinates");
+const hideAxesAndLinesInput = document.getElementById("hideAxesAndLines");
 const showBoostedGridInput = document.getElementById("showBoostedGrid");
 const undoButton = document.getElementById("undo");
 const clearButton = document.getElementById("clear");
+const copyDiagramButton = document.getElementById("copyDiagram");
+const copyDiagramStatus = document.getElementById("copyDiagramStatus");
 
 const state = {
   beta: 0,
   activeBoostEnabled: false,
   activeBoostBeta: 0,
+  rectifyViewEnabled: false,
+  rectifyAmount: 0,
   scale: 40,
   activeTool: "line",
   strokeColor: "#0d2e3c",
   showReferenceGrid: true,
   showLightCones: true,
   showHyperboles: false,
+  clipToHyperbolae: false,
   showHyperbolaPoints: false,
   showAxisCoordinates: true,
   showReferenceAxisCoordinates: true,
@@ -38,6 +50,7 @@ const state = {
   showReferencePointGuides: false,
   showLineLengths: true,
   showPointCoordinates: true,
+  hideAxesAndLines: false,
   showBoostedGrid: false,
   strokes: [],
   drawing: false,
@@ -55,7 +68,10 @@ const view = {
   height: 0
 };
 
-const HYPERBOLA_LEVELS = Array.from({ length: 21 }, (_, index) => index + 1);
+let copyDiagramStatusTimeoutId = null;
+
+const HYPERBOLA_LEVELS = Array.from({ length: 10 }, (_, index) => (index + 1) * 2);
+const LIGHT_CONE_MARKER_STEP = HYPERBOLA_LEVELS[0] ?? 2;
 const MIN_HYPERBOLA_X_EXTENT = 21;
 const HYPERBOLA_MARKER_RAPIDITY_STEP = 0.45;
 
@@ -72,8 +88,29 @@ function clampBeta(beta) {
   return Math.max(-limit, Math.min(limit, beta));
 }
 
+function rapidity(beta) {
+  const normalizedBeta = clampBeta(beta);
+  return 0.5 * Math.log((1 + normalizedBeta) / (1 - normalizedBeta));
+}
+
+function betaFromRapidity(value) {
+  return Math.tanh(value);
+}
+
 function renderBeta() {
   return -state.beta;
+}
+
+function displayRectificationAmount() {
+  return state.rectifyViewEnabled ? state.rectifyAmount : 0;
+}
+
+function displayBetaForAmount(amount) {
+  if (amount < 1e-9 || Math.abs(state.beta) < 1e-9) {
+    return 0;
+  }
+
+  return betaFromRapidity(rapidity(state.beta) * amount);
 }
 
 function lorentz(point, beta) {
@@ -119,7 +156,63 @@ function syncDiagramBoostState(targetBeta) {
   state.activeBoostBeta = normalizedTarget;
 }
 
+function getDisplayTransformMatrixForAmount(amount) {
+  const displayBeta = displayBetaForAmount(amount);
+  if (Math.abs(displayBeta) < 1e-9) {
+    return {
+      a: 1,
+      b: 0,
+      determinant: 1
+    };
+  }
+
+  const g = gamma(displayBeta);
+  const a = g;
+  const b = -g * displayBeta;
+  return {
+    a,
+    b,
+    determinant: a * a - b * b
+  };
+}
+
+function getDisplayTransformMatrix() {
+  return getDisplayTransformMatrixForAmount(displayRectificationAmount());
+}
+
+function applyDisplayTransform(point) {
+  const { a, b } = getDisplayTransformMatrix();
+  return {
+    x: a * point.x + b * point.t,
+    t: b * point.x + a * point.t
+  };
+}
+
+function invertDisplayTransformWithMatrix(point, matrix) {
+  const { a, b, determinant } = matrix;
+  if (Math.abs(determinant) < 1e-9) {
+    return point;
+  }
+
+  return {
+    x: (a * point.x - b * point.t) / determinant,
+    t: (-b * point.x + a * point.t) / determinant
+  };
+}
+
+function invertDisplayTransform(point) {
+  return invertDisplayTransformWithMatrix(point, getDisplayTransformMatrix());
+}
+
 function worldToScreen(point) {
+  const displayPoint = applyDisplayTransform(point);
+  return {
+    x: view.width * 0.5 + displayPoint.x * state.scale,
+    y: view.height * 0.5 - displayPoint.t * state.scale
+  };
+}
+
+function referenceWorldToScreen(point) {
   return {
     x: view.width * 0.5 + point.x * state.scale,
     y: view.height * 0.5 - point.t * state.scale
@@ -127,17 +220,144 @@ function worldToScreen(point) {
 }
 
 function screenToWorld(point) {
-  return {
+  const displayPoint = {
     x: (point.x - view.width * 0.5) / state.scale,
     t: (view.height * 0.5 - point.y) / state.scale
   };
+  return invertDisplayTransform(displayPoint);
 }
 
-function getWorldBounds() {
+function getReferenceWorldBounds() {
   return {
     maxX: view.width * 0.5 / state.scale,
     maxT: view.height * 0.5 / state.scale
   };
+}
+
+function getWorldBoundsForDisplayAmount(amount) {
+  const matrix = getDisplayTransformMatrixForAmount(amount);
+  const corners = [
+    { x: 0, y: 0 },
+    { x: view.width, y: 0 },
+    { x: 0, y: view.height },
+    { x: view.width, y: view.height }
+  ].map((corner) => {
+    const displayPoint = {
+      x: (corner.x - view.width * 0.5) / state.scale,
+      t: (view.height * 0.5 - corner.y) / state.scale
+    };
+    return invertDisplayTransformWithMatrix(displayPoint, matrix);
+  });
+
+  let maxX = 0;
+  let maxT = 0;
+  for (const corner of corners) {
+    maxX = Math.max(maxX, Math.abs(corner.x));
+    maxT = Math.max(maxT, Math.abs(corner.t));
+  }
+
+  return {
+    maxX,
+    maxT
+  };
+}
+
+function getStableHyperbolaExtents() {
+  const referenceBounds = getReferenceWorldBounds();
+  const fullyRectifiedBounds = getWorldBoundsForDisplayAmount(1);
+  return {
+    xExtent: Math.max(referenceBounds.maxX * 1.1, fullyRectifiedBounds.maxX * 1.1, MIN_HYPERBOLA_X_EXTENT),
+    tExtent: Math.max(referenceBounds.maxT * 1.1, fullyRectifiedBounds.maxT * 1.1, MIN_HYPERBOLA_X_EXTENT)
+  };
+}
+
+function getWorldBounds() {
+  const corners = [
+    { x: 0, y: 0 },
+    { x: view.width, y: 0 },
+    { x: 0, y: view.height },
+    { x: view.width, y: view.height }
+  ].map((corner) => screenToWorld(corner));
+
+  let maxX = 0;
+  let maxT = 0;
+  for (const corner of corners) {
+    maxX = Math.max(maxX, Math.abs(corner.x));
+    maxT = Math.max(maxT, Math.abs(corner.t));
+  }
+
+  return {
+    maxX,
+    maxT
+  };
+}
+
+function setCopyDiagramStatus(message, options = {}) {
+  const { isError = false, persist = false } = options;
+  if (!copyDiagramStatus) {
+    return;
+  }
+
+  copyDiagramStatus.textContent = message;
+  copyDiagramStatus.classList.toggle("error", isError);
+
+  if (copyDiagramStatusTimeoutId != null) {
+    window.clearTimeout(copyDiagramStatusTimeoutId);
+    copyDiagramStatusTimeoutId = null;
+  }
+
+  if (!message || persist) {
+    return;
+  }
+
+  copyDiagramStatusTimeoutId = window.setTimeout(() => {
+    copyDiagramStatus.textContent = "";
+    copyDiagramStatus.classList.remove("error");
+    copyDiagramStatusTimeoutId = null;
+  }, 2200);
+}
+
+function canvasToBlob(sourceCanvas, type = "image/png") {
+  return new Promise((resolve) => {
+    sourceCanvas.toBlob((blob) => resolve(blob), type);
+  });
+}
+
+async function copyDiagramToClipboard() {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+    setCopyDiagramStatus("Clipboard unavailable", { isError: true });
+    return;
+  }
+
+  copyDiagramButton.disabled = true;
+  setCopyDiagramStatus("Copying...", { persist: true });
+
+  try {
+    draw();
+
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportContext = exportCanvas.getContext("2d");
+    exportContext.drawImage(canvas, 0, 0);
+
+    const blob = await canvasToBlob(exportCanvas);
+    if (!blob) {
+      throw new Error("Unable to export diagram image.");
+    }
+
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        [blob.type]: blob
+      })
+    ]);
+    setCopyDiagramStatus("Copied");
+  } catch (error) {
+    console.error(error);
+    setCopyDiagramStatus("Copy failed", { isError: true });
+  } finally {
+    copyDiagramButton.disabled = false;
+  }
 }
 
 function eventToScreenPoint(event) {
@@ -152,6 +372,17 @@ function pointDistanceSquared(a, b) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   return dx * dx + dy * dy;
+}
+
+function snapPointToOrigin(point, thresholdPx = 10) {
+  const origin = { x: 0, t: 0 };
+  const screenPoint = worldToScreen(point);
+  const originScreenPoint = worldToScreen(origin);
+  if (pointDistanceSquared(screenPoint, originScreenPoint) > thresholdPx * thresholdPx) {
+    return point;
+  }
+
+  return origin;
 }
 
 function snapPointToReferenceGrid(point, thresholdPx = 10) {
@@ -184,6 +415,55 @@ function snapPointToBoostedGrid(point, thresholdPx = 10) {
   return snappedPoint;
 }
 
+function nearestHyperbolaLevel(level) {
+  if (!Number.isFinite(level)) {
+    return null;
+  }
+
+  let bestLevel = null;
+  let bestDelta = Infinity;
+  for (const candidate of HYPERBOLA_LEVELS) {
+    const delta = Math.abs(candidate - level);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestLevel = candidate;
+    }
+  }
+
+  return bestLevel;
+}
+
+function snapPointToDisplayedHyperbola(point, thresholdPx = 10) {
+  const originSnappedPoint = snapPointToOrigin(point, thresholdPx);
+  if (originSnappedPoint.x === 0 && originSnappedPoint.t === 0) {
+    return originSnappedPoint;
+  }
+
+  const s2 = point.t * point.t - point.x * point.x;
+  const magnitude = Math.sqrt(Math.abs(s2));
+  if (!Number.isFinite(magnitude) || magnitude < 1e-6) {
+    return point;
+  }
+
+  const snappedMagnitude = nearestHyperbolaLevel(magnitude);
+  if (snappedMagnitude == null) {
+    return point;
+  }
+
+  const scale = snappedMagnitude / magnitude;
+  const snappedPoint = {
+    x: point.x * scale,
+    t: point.t * scale
+  };
+  const screenPoint = worldToScreen(point);
+  const snappedScreenPoint = worldToScreen(snappedPoint);
+  if (pointDistanceSquared(screenPoint, snappedScreenPoint) > thresholdPx * thresholdPx) {
+    return point;
+  }
+
+  return snappedPoint;
+}
+
 function snapPointToActiveGrid(point, thresholdPx = 10) {
   if (state.showReferenceGrid) {
     return snapPointToReferenceGrid(point, thresholdPx);
@@ -196,9 +476,18 @@ function snapPointToActiveGrid(point, thresholdPx = 10) {
   return point;
 }
 
-function maybeSnapPointToActiveGrid(point, event) {
+function hyperbolaClipActive() {
+  return state.showHyperboles && state.clipToHyperbolae;
+}
+
+function maybeSnapPoint(point, event, options = {}) {
+  const { preferHyperbolae = false } = options;
   if (event.altKey) {
     return point;
+  }
+
+  if (preferHyperbolae && hyperbolaClipActive()) {
+    return snapPointToDisplayedHyperbola(point);
   }
 
   return snapPointToActiveGrid(point);
@@ -243,12 +532,25 @@ function transformedStrokeScreenDistance(stroke, screenPoint) {
   return Math.sqrt(minDistanceSquared);
 }
 
+function canRenderStroke(stroke) {
+  if (!stroke) {
+    return false;
+  }
+
+  return !(state.hideAxesAndLines && stroke.kind === "line");
+}
+
 function findTopmostStrokeAtScreenPoint(screenPoint, thresholdPx = 10) {
   let bestIndex = -1;
   let bestDistance = thresholdPx;
 
   for (let i = state.strokes.length - 1; i >= 0; i -= 1) {
-    const d = transformedStrokeScreenDistance(state.strokes[i], screenPoint);
+    const stroke = state.strokes[i];
+    if (!canRenderStroke(stroke)) {
+      continue;
+    }
+
+    const d = transformedStrokeScreenDistance(stroke, screenPoint);
     if (d <= bestDistance) {
       bestDistance = d;
       bestIndex = i;
@@ -309,6 +611,36 @@ function formatIntervalSquareRoot(metrics) {
   }
 
   return metrics.absS.toFixed(3);
+}
+
+function pointIsAtOrigin(point, epsilon = 1e-6) {
+  return Math.abs(point.x) < epsilon && Math.abs(point.t) < epsilon;
+}
+
+function getHyperbolaClippedIntervalOverride(stroke) {
+  if (!stroke || stroke.kind !== "line" || stroke.points.length < 2) {
+    return null;
+  }
+
+  const [start, end] = stroke.points;
+  const startAtOrigin = pointIsAtOrigin(start);
+  const endAtOrigin = pointIsAtOrigin(end);
+  if (startAtOrigin === endAtOrigin) {
+    return null;
+  }
+
+  const measuredPoint = startAtOrigin ? end : start;
+  const s2 = measuredPoint.t * measuredPoint.t - measuredPoint.x * measuredPoint.x;
+  const magnitude = Math.sqrt(Math.abs(s2));
+  const snappedMagnitude = nearestHyperbolaLevel(magnitude);
+  if (snappedMagnitude == null || Math.abs(magnitude - snappedMagnitude) > 1e-4) {
+    return null;
+  }
+
+  return {
+    absS: snappedMagnitude,
+    kind: s2 >= 0 ? "timelike" : "spacelike"
+  };
 }
 
 function collectIntervalMarkers(points, spacing = 1, maxMarkers = 900) {
@@ -377,25 +709,29 @@ function drawGrid() {
   const { maxX, maxT } = getWorldBounds();
   const minX = -maxX;
   const minT = -maxT;
+  const xExtent = maxX * 1.1;
+  const tExtent = maxT * 1.1;
 
   ctx.save();
   ctx.lineWidth = 1;
 
   for (let x = Math.ceil(minX); x <= Math.floor(maxX); x += 1) {
-    const sx = worldToScreen({ x, t: 0 }).x;
+    const start = worldToScreen({ x, t: -tExtent });
+    const end = worldToScreen({ x, t: tExtent });
     ctx.strokeStyle = x % 5 === 0 ? "#d5dde3" : "#edf1f4";
     ctx.beginPath();
-    ctx.moveTo(sx, 0);
-    ctx.lineTo(sx, view.height);
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
     ctx.stroke();
   }
 
   for (let t = Math.ceil(minT); t <= Math.floor(maxT); t += 1) {
-    const sy = worldToScreen({ x: 0, t }).y;
+    const start = worldToScreen({ x: -xExtent, t });
+    const end = worldToScreen({ x: xExtent, t });
     ctx.strokeStyle = t % 5 === 0 ? "#d5dde3" : "#edf1f4";
     ctx.beginPath();
-    ctx.moveTo(0, sy);
-    ctx.lineTo(view.width, sy);
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
     ctx.stroke();
   }
 
@@ -740,18 +1076,19 @@ function drawReferenceAxisCoordinateValues() {
 }
 
 function drawLightCones() {
-  const { maxX, maxT } = getWorldBounds();
-  const m = Math.max(maxX, maxT) * 1.2;
+  const { xExtent, tExtent } = getStableHyperbolaExtents();
+  const m = Math.max(xExtent, tExtent);
 
   ctx.save();
   ctx.strokeStyle = "#dc3a4a";
   ctx.lineWidth = 1.4;
   ctx.setLineDash([7, 5]);
+  ctx.lineDashOffset = 0;
 
-  const a1 = worldToScreen({ x: -m, t: -m });
-  const b1 = worldToScreen({ x: m, t: m });
-  const a2 = worldToScreen({ x: -m, t: m });
-  const b2 = worldToScreen({ x: m, t: -m });
+  const a1 = referenceWorldToScreen({ x: -m, t: -m });
+  const b1 = referenceWorldToScreen({ x: m, t: m });
+  const a2 = referenceWorldToScreen({ x: -m, t: m });
+  const b2 = referenceWorldToScreen({ x: m, t: -m });
 
   ctx.beginPath();
   ctx.moveTo(a1.x, a1.y);
@@ -763,7 +1100,7 @@ function drawLightCones() {
   ctx.restore();
 }
 
-function plotWorldCurve(samples, color, width = 1.1, dash = []) {
+function plotWorldCurve(samples, color, width = 1.1, dash = [], projectToScreen = worldToScreen) {
   if (samples.length < 2) {
     return;
   }
@@ -774,11 +1111,11 @@ function plotWorldCurve(samples, color, width = 1.1, dash = []) {
   ctx.setLineDash(dash);
   ctx.beginPath();
 
-  const first = worldToScreen(samples[0]);
+  const first = projectToScreen(samples[0]);
   ctx.moveTo(first.x, first.y);
 
   for (let i = 1; i < samples.length; i += 1) {
-    const p = worldToScreen(samples[i]);
+    const p = projectToScreen(samples[i]);
     ctx.lineTo(p.x, p.y);
   }
 
@@ -787,8 +1124,7 @@ function plotWorldCurve(samples, color, width = 1.1, dash = []) {
 }
 
 function drawHyperboles() {
-  const { maxX, maxT } = getWorldBounds();
-  const xExtent = Math.max(maxX * 1.1, MIN_HYPERBOLA_X_EXTENT);
+  const { xExtent, tExtent: baseTExtent } = getStableHyperbolaExtents();
   const dx = 0.04;
   const dt = 0.04;
 
@@ -802,13 +1138,13 @@ function drawHyperboles() {
       timelikeBottom.push({ x, t: -t });
     }
 
-    plotWorldCurve(timelikeTop, "#1a87a7", 1, [4, 4]);
-    plotWorldCurve(timelikeBottom, "#1a87a7", 1, [4, 4]);
+    plotWorldCurve(timelikeTop, "#1a87a7", 1, [4, 4], referenceWorldToScreen);
+    plotWorldCurve(timelikeBottom, "#1a87a7", 1, [4, 4], referenceWorldToScreen);
 
     const spacelikeRight = [];
     const spacelikeLeft = [];
     const requiredTExtent = Math.sqrt(Math.max(0, xExtent * xExtent - a * a));
-    const tExtent = Math.max(maxT * 1.1, requiredTExtent);
+    const tExtent = Math.max(baseTExtent, requiredTExtent);
 
     for (let t = -tExtent; t <= tExtent; t += dt) {
       const x = Math.sqrt(a * a + t * t);
@@ -816,8 +1152,8 @@ function drawHyperboles() {
       spacelikeLeft.push({ x: -x, t });
     }
 
-    plotWorldCurve(spacelikeRight, "#49a35e", 1, [4, 4]);
-    plotWorldCurve(spacelikeLeft, "#49a35e", 1, [4, 4]);
+    plotWorldCurve(spacelikeRight, "#49a35e", 1, [4, 4], referenceWorldToScreen);
+    plotWorldCurve(spacelikeLeft, "#49a35e", 1, [4, 4], referenceWorldToScreen);
   }
 }
 
@@ -837,8 +1173,7 @@ function getHyperbolaMarkerRapidities(xExtent) {
 function getHyperbolaMarkerData() {
   const markers = [];
   const boostBeta = state.activeBoostBeta;
-  const { maxX } = getWorldBounds();
-  const xExtent = Math.max(maxX * 1.1, MIN_HYPERBOLA_X_EXTENT);
+  const { xExtent, tExtent } = getStableHyperbolaExtents();
   const rayRapidities = getHyperbolaMarkerRapidities(xExtent);
 
   for (const level of HYPERBOLA_LEVELS) {
@@ -869,6 +1204,25 @@ function getHyperbolaMarkerData() {
           color: "#49a35e"
         });
       }
+    }
+  }
+
+  const coneExtent = Math.max(xExtent, tExtent);
+  const maxConeLevel = Math.ceil(coneExtent / LIGHT_CONE_MARKER_STEP) * LIGHT_CONE_MARKER_STEP;
+
+  for (let level = LIGHT_CONE_MARKER_STEP; level <= maxConeLevel; level += LIGHT_CONE_MARKER_STEP) {
+    const lightConePoints = [
+      { x: level, t: level },
+      { x: -level, t: level },
+      { x: level, t: -level },
+      { x: -level, t: -level }
+    ];
+
+    for (const point of lightConePoints) {
+      markers.push({
+        point: activeBoostTransform(point, boostBeta),
+        color: "#dc3a4a"
+      });
     }
   }
 
@@ -909,6 +1263,10 @@ function drawStrokes() {
   ctx.lineCap = "round";
 
   for (const stroke of state.strokes) {
+    if (!canRenderStroke(stroke)) {
+      continue;
+    }
+
     const { points } = stroke;
     if (!points.length) {
       continue;
@@ -954,7 +1312,7 @@ function drawIntervalMarkers() {
 
   for (const stroke of state.strokes) {
     const points = stroke.points || [];
-    if (points.length < 2) {
+    if (stroke.kind !== "line" || !canRenderStroke(stroke) || points.length < 2) {
       continue;
     }
 
@@ -997,6 +1355,7 @@ function drawLineLengthLabels() {
     const start = stroke.points[0];
     const end = stroke.points[1];
     const metrics = intervalMetrics(start, end);
+    const displayMetrics = getHyperbolaClippedIntervalOverride(stroke) || metrics;
 
     const transformedStart = worldToScreen(start);
     const transformedEnd = worldToScreen(end);
@@ -1005,7 +1364,7 @@ function drawLineLengthLabels() {
       y: (transformedStart.y + transformedEnd.y) * 0.5
     };
 
-    const label = `I = ${formatIntervalSquareRoot(metrics)}`;
+    const label = `I = ${formatIntervalSquareRoot(displayMetrics)}`;
     const width = ctx.measureText(label).width;
     const boxX = midpoint.x + 10;
     const boxY = midpoint.y - 22;
@@ -1175,6 +1534,10 @@ function drawOverlay() {
     lines.unshift(`geometry v = ${formatVelocityPercent(state.activeBoostBeta)} of c`);
   }
 
+  if (state.rectifyViewEnabled) {
+    lines.unshift(`view rectification = ${Math.round(state.rectifyAmount * 100)}%`);
+  }
+
   for (let i = 0; i < lines.length; i += 1) {
     const y = view.height - 10 - (lines.length - 1 - i) * 16;
     ctx.fillText(lines[i], 12, y);
@@ -1197,7 +1560,9 @@ function draw() {
   if (state.showLightCones) {
     drawLightCones();
   }
-  drawAxes();
+  if (!state.hideAxesAndLines) {
+    drawAxes();
+  }
   if (state.showHyperbolaPoints) {
     drawHyperbolaPoints();
   }
@@ -1208,17 +1573,23 @@ function draw() {
     drawBoostedPointGuides();
   }
   drawStrokes();
-  drawIntervalMarkers();
-  if (state.showLineLengths) {
+  if (!state.hideAxesAndLines) {
+    drawIntervalMarkers();
+  }
+  if (!state.hideAxesAndLines && state.showLineLengths) {
     drawLineLengthLabels();
   }
   if (state.showPointCoordinates) {
     drawPointCoordinateLabels();
   }
-  if (state.showAxisCoordinates) {
+  if (!state.hideAxesAndLines && state.showAxisCoordinates) {
     drawAxisCoordinateValues();
   }
-  if (state.showReferenceAxisCoordinates && canShowReferenceAxisCoordinateValues()) {
+  if (
+    !state.hideAxesAndLines &&
+    state.showReferenceAxisCoordinates &&
+    canShowReferenceAxisCoordinateValues()
+  ) {
     drawReferenceAxisCoordinateValues();
   }
   drawOverlay();
@@ -1264,7 +1635,7 @@ function startStroke(event) {
   }
 
   if (state.activeTool === "point") {
-    const snappedPoint = maybeSnapPointToActiveGrid(point, event);
+    const snappedPoint = maybeSnapPoint(point, event);
     const groupId = state.nextGroupId;
     state.nextGroupId += 1;
     state.strokes.push({
@@ -1290,7 +1661,7 @@ function startStroke(event) {
   state.currentPointerId = event.pointerId;
   state.currentGroupId = groupId;
   canvas.setPointerCapture(event.pointerId);
-  const startPoint = maybeSnapPointToActiveGrid(point, event);
+  const startPoint = maybeSnapPoint(point, event, { preferHyperbolae: true });
 
   state.strokes.push({
     points: [startPoint, startPoint],
@@ -1359,7 +1730,7 @@ function updateStroke(event) {
   }
 
   const point = eventToBaseFramePoint(event);
-  stroke.points[1] = maybeSnapPointToActiveGrid(point, event);
+  stroke.points[1] = maybeSnapPoint(point, event, { preferHyperbolae: true });
   draw();
 }
 
@@ -1416,10 +1787,41 @@ function formatVelocityPercent(beta) {
   return `${Math.round(beta * 100)}%`;
 }
 
+function clampBetaToControlRange(beta) {
+  const min = Number.parseFloat(betaInput.min);
+  const max = Number.parseFloat(betaInput.max);
+  return Math.max(min, Math.min(max, clampBeta(beta)));
+}
+
+function syncBetaDrivenState() {
+  betaInput.value = String(state.beta);
+  if (state.activeBoostEnabled) {
+    syncDiagramBoostState(state.beta);
+  }
+  syncVelocityLabels();
+  draw();
+}
+
 function syncVelocityLabels() {
   const g = gamma(state.beta);
-  betaValue.textContent = `${formatVelocityPercent(state.beta)} of c`;
-  gammaValue.textContent = `(gamma = ${g.toFixed(2)})`;
+  betaValue.value = String(Math.round(state.beta * 100));
+  gammaValue.value = g.toFixed(2);
+}
+
+function syncRectifyLabels() {
+  rectifyValue.textContent = `${Math.round(state.rectifyAmount * 100)}%`;
+}
+
+function syncRectifyControls() {
+  rectifyRow.hidden = !state.rectifyViewEnabled;
+  rectifyAmountInput.disabled = !state.rectifyViewEnabled;
+  rectifyAmountInput.value = String(state.rectifyAmount);
+  syncRectifyLabels();
+}
+
+function syncHyperbolaClipControls() {
+  hyperbolaClipLabel.hidden = !state.showHyperboles;
+  clipToHyperbolaeInput.disabled = !state.showHyperboles;
 }
 
 function removeLastShapeGroup() {
@@ -1484,12 +1886,32 @@ function isEditableElement(element) {
 }
 
 betaInput.addEventListener("input", () => {
-  state.beta = clampBeta(Number.parseFloat(betaInput.value));
-  if (state.activeBoostEnabled) {
-    syncDiagramBoostState(state.beta);
+  state.beta = clampBetaToControlRange(Number.parseFloat(betaInput.value));
+  syncBetaDrivenState();
+});
+
+betaValue.addEventListener("change", () => {
+  const percent = Number.parseFloat(betaValue.value);
+  if (!Number.isFinite(percent)) {
+    syncVelocityLabels();
+    return;
   }
-  syncVelocityLabels();
-  draw();
+
+  state.beta = clampBetaToControlRange(percent / 100);
+  syncBetaDrivenState();
+});
+
+gammaValue.addEventListener("change", () => {
+  const nextGamma = Number.parseFloat(gammaValue.value);
+  if (!Number.isFinite(nextGamma) || nextGamma < 1) {
+    syncVelocityLabels();
+    return;
+  }
+
+  const magnitude = Math.sqrt(Math.max(0, 1 - 1 / (nextGamma * nextGamma)));
+  const sign = state.beta < -1e-9 ? -1 : 1;
+  state.beta = clampBetaToControlRange(sign * magnitude);
+  syncBetaDrivenState();
 });
 
 activeBoostInput.addEventListener("change", () => {
@@ -1497,6 +1919,18 @@ activeBoostInput.addEventListener("change", () => {
   if (state.activeBoostEnabled) {
     syncDiagramBoostState(state.beta);
   }
+  draw();
+});
+
+rectifyViewInput.addEventListener("change", () => {
+  state.rectifyViewEnabled = rectifyViewInput.checked;
+  syncRectifyControls();
+  draw();
+});
+
+rectifyAmountInput.addEventListener("input", () => {
+  state.rectifyAmount = Number.parseFloat(rectifyAmountInput.value);
+  syncRectifyLabels();
   draw();
 });
 
@@ -1512,7 +1946,16 @@ showLightConesInput.addEventListener("change", () => {
 
 showHyperbolesInput.addEventListener("change", () => {
   state.showHyperboles = showHyperbolesInput.checked;
+  if (!state.showHyperboles) {
+    state.clipToHyperbolae = false;
+    clipToHyperbolaeInput.checked = false;
+  }
+  syncHyperbolaClipControls();
   draw();
+});
+
+clipToHyperbolaeInput.addEventListener("change", () => {
+  state.clipToHyperbolae = clipToHyperbolaeInput.checked;
 });
 
 showHyperbolaPointsInput.addEventListener("change", () => {
@@ -1550,6 +1993,11 @@ showPointCoordinatesInput.addEventListener("change", () => {
   draw();
 });
 
+hideAxesAndLinesInput.addEventListener("change", () => {
+  state.hideAxesAndLines = hideAxesAndLinesInput.checked;
+  draw();
+});
+
 showBoostedGridInput.addEventListener("change", () => {
   state.showBoostedGrid = showBoostedGridInput.checked;
   draw();
@@ -1571,6 +2019,10 @@ undoButton.addEventListener("click", () => {
 clearButton.addEventListener("click", () => {
   state.strokes = [];
   draw();
+});
+
+copyDiagramButton.addEventListener("click", () => {
+  copyDiagramToClipboard();
 });
 
 window.addEventListener("keydown", (event) => {
@@ -1595,7 +2047,12 @@ window.addEventListener("resize", resizeCanvas);
 
 drawToolInput.value = state.activeTool;
 activeBoostInput.checked = state.activeBoostEnabled;
+rectifyViewInput.checked = state.rectifyViewEnabled;
+clipToHyperbolaeInput.checked = state.clipToHyperbolae;
 showHyperbolaPointsInput.checked = state.showHyperbolaPoints;
+hideAxesAndLinesInput.checked = state.hideAxesAndLines;
 syncToolControls();
 syncVelocityLabels();
+syncRectifyControls();
+syncHyperbolaClipControls();
 resizeCanvas();
