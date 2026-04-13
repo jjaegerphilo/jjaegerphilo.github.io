@@ -16,6 +16,7 @@
         <select id="drawTool">
           <option value="point">Point</option>
           <option value="line" selected>Straight line</option>
+          <option value="move">Move object</option>
           <option value="eraser">Eraser</option>
         </select>
         <label for="strokeColor">Draw color</label>
@@ -24,8 +25,54 @@
           <button id="undo" type="button">Undo Stroke</button>
           <button id="clear" type="button">Clear</button>
           <button id="copyDiagram" type="button">Copy diagram</button>
+          <button id="axisVisibilityButton" type="button" aria-expanded="false">Axes</button>
           <span id="copyDiagramStatus" class="action-status" aria-live="polite"></span>
         </div>
+      </div>
+      <div id="copyDiagramPopover" class="copy-diagram-popover" hidden>
+        <span class="copy-diagram-title">Crop for copied diagram</span>
+        <label class="copy-range-field" for="copyXMin">
+          <span>x min</span>
+          <input id="copyXMin" type="number" step="0.1" />
+        </label>
+        <label class="copy-range-field" for="copyXMax">
+          <span>x max</span>
+          <input id="copyXMax" type="number" step="0.1" />
+        </label>
+        <label class="copy-range-field" for="copyTMin">
+          <span>t min</span>
+          <input id="copyTMin" type="number" step="0.1" />
+        </label>
+        <label class="copy-range-field" for="copyTMax">
+          <span>t max</span>
+          <input id="copyTMax" type="number" step="0.1" />
+        </label>
+        <div class="copy-diagram-actions">
+          <button id="confirmCopyDiagram" type="button">Copy to clipboard</button>
+          <button id="cancelCopyDiagram" type="button">Cancel</button>
+        </div>
+      </div>
+      <div id="axisVisibilityPopover" class="copy-diagram-popover axis-visibility-popover" hidden>
+        <span class="copy-diagram-title">Axis visibility</span>
+        <label class="check" for="axisHideLineMode">
+          <input id="axisHideLineMode" type="checkbox" />
+          Click axes to hide
+        </label>
+        <label class="check" for="axisHideLabelMode">
+          <input id="axisHideLabelMode" type="checkbox" />
+          Click labels to hide
+        </label>
+        <label class="copy-range-field axis-grid-filter" for="gridParallelAxis">
+          <span>Grid lines parallel to</span>
+          <select id="gridParallelAxis">
+            <option value="all">All visible axes</option>
+            <option value="referenceX">x</option>
+            <option value="referenceT">t</option>
+            <option value="boostedX">x'</option>
+            <option value="boostedT">t'</option>
+          </select>
+        </label>
+        <button id="resetAxisVisibility" type="button">Show all</button>
       </div>
       <div class="toggle-groups">
         <section class="toggle-panel">
@@ -89,6 +136,15 @@
               Clip
             </label>
           </div>
+          <label
+            id="hyperbolaSpacingLabel"
+            class="copy-range-field hyperbola-spacing is-hidden"
+            for="hyperbolaSpacing"
+            aria-hidden="true"
+          >
+            <span>Spacing</span>
+            <input id="hyperbolaSpacing" type="number" min="1" max="21" step="1" value="2" />
+          </label>
           <label class="check">
             <input id="showHyperbolaPoints" type="checkbox" />
             Hyperbola points
@@ -130,11 +186,14 @@
         </button>
         <p id="tutorialPanel" class="hint tutorial-panel" role="note" hidden>
           Use Point to drop an event marker. Use Straight line by click-dragging.
+          Use Move object to grab existing geometry and drag it elsewhere.
           Use Eraser to remove shapes by click or drag.
+          Use Axes to temporarily hide individual axis lines or labels by clicking on them, or to show only grid lines parallel to one chosen axis.
           Hold Option while placing points or drawing lines to bypass grid snapping.
-          Use Shift+drag to reposition existing geometry.
+          Shift+drag still repositions existing geometry as a shortcut.
           Rectify view slides the page rendering from reference-orthogonal to boosted-orthogonal without changing the relative velocity.
           With Equal-distance hyperboles on, Clip snaps line endpoints to the nearest displayed hyperbola.
+          Use the hyperbola spacing box to choose how densely those equal-distance curves are drawn.
           Hyperbola points mark sample events on the equal-distance curves and light cones.
           Hide axes &amp; drawn lines temporarily clears the frame axes and user-drawn line segments without deleting them.
         </p>

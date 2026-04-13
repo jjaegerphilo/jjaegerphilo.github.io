@@ -1,5 +1,5 @@
 const canvas = document.getElementById("diagram");
-const ctx = canvas.getContext("2d");
+let ctx = canvas.getContext("2d");
 
 const betaInput = document.getElementById("beta");
 const betaValue = document.getElementById("betaValue");
@@ -15,6 +15,8 @@ const showLightConesInput = document.getElementById("showLightCones");
 const showHyperbolesInput = document.getElementById("showHyperboles");
 const hyperbolaClipLabel = document.getElementById("hyperbolaClipLabel");
 const clipToHyperbolaeInput = document.getElementById("clipToHyperbolae");
+const hyperbolaSpacingLabel = document.getElementById("hyperbolaSpacingLabel");
+const hyperbolaSpacingInput = document.getElementById("hyperbolaSpacing");
 const showHyperbolaPointsInput = document.getElementById("showHyperbolaPoints");
 const showAxisCoordinatesInput = document.getElementById("showAxisCoordinates");
 const showReferenceAxisCoordinatesInput = document.getElementById("showReferenceAxisCoordinates");
@@ -28,10 +30,32 @@ const undoButton = document.getElementById("undo");
 const clearButton = document.getElementById("clear");
 const copyDiagramButton = document.getElementById("copyDiagram");
 const copyDiagramStatus = document.getElementById("copyDiagramStatus");
+const copyDiagramPopover = document.getElementById("copyDiagramPopover");
+const copyXMinInput = document.getElementById("copyXMin");
+const copyXMaxInput = document.getElementById("copyXMax");
+const copyTMinInput = document.getElementById("copyTMin");
+const copyTMaxInput = document.getElementById("copyTMax");
+const confirmCopyDiagramButton = document.getElementById("confirmCopyDiagram");
+const cancelCopyDiagramButton = document.getElementById("cancelCopyDiagram");
+const axisVisibilityButton = document.getElementById("axisVisibilityButton");
+const axisVisibilityPopover = document.getElementById("axisVisibilityPopover");
+const axisHideLineModeInput = document.getElementById("axisHideLineMode");
+const axisHideLabelModeInput = document.getElementById("axisHideLabelMode");
+const gridParallelAxisInput = document.getElementById("gridParallelAxis");
+const resetAxisVisibilityButton = document.getElementById("resetAxisVisibility");
 const lastUpdatedNote = document.getElementById("lastUpdated");
 const tutorialPopover = document.querySelector(".tutorial-popover");
 const tutorialTrigger = document.getElementById("tutorialTrigger");
 const tutorialPanel = document.getElementById("tutorialPanel");
+
+function createAxisVisibilityState() {
+  return {
+    referenceX: { lineVisible: true, labelVisible: true },
+    referenceT: { lineVisible: true, labelVisible: true },
+    boostedX: { lineVisible: true, labelVisible: true },
+    boostedT: { lineVisible: true, labelVisible: true }
+  };
+}
 
 const state = {
   beta: 0,
@@ -43,6 +67,7 @@ const state = {
   showReferenceGrid: true,
   showLightCones: true,
   showHyperboles: false,
+  hyperbolaSpacing: 2,
   clipToHyperbolae: false,
   showHyperbolaPoints: false,
   showAxisCoordinates: true,
@@ -52,6 +77,12 @@ const state = {
   showLineLengths: true,
   showPointCoordinates: true,
   hideAxesAndLines: false,
+  axisVisibilityEdit: {
+    lines: false,
+    labels: false
+  },
+  axisVisibility: createAxisVisibilityState(),
+  gridParallelAxis: "all",
   showBoostedGrid: false,
   strokes: [],
   drawing: false,
@@ -70,11 +101,19 @@ const view = {
 };
 
 let copyDiagramStatusTimeoutId = null;
+let renderViewportOverride = null;
+let axisVisibilityTargets = [];
 
-const HYPERBOLA_LEVELS = Array.from({ length: 10 }, (_, index) => (index + 1) * 2);
-const LIGHT_CONE_MARKER_STEP = HYPERBOLA_LEVELS[0] ?? 2;
+const DEFAULT_HYPERBOLA_SPACING = 2;
+const MAX_HYPERBOLA_LEVEL = 21;
 const MIN_HYPERBOLA_X_EXTENT = 21;
 const HYPERBOLA_MARKER_RAPIDITY_STEP = 0.45;
+const DEFAULT_COPY_VIEWPORT = {
+  xMin: -13,
+  xMax: 13,
+  tMin: -11,
+  tMax: 11
+};
 
 function gamma(beta) {
   return 1 / Math.sqrt(1 - beta * beta);
@@ -96,6 +135,29 @@ function rapidity(beta) {
 
 function betaFromRapidity(value) {
   return Math.tanh(value);
+}
+
+function sanitizeHyperbolaSpacing(value) {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_HYPERBOLA_SPACING;
+  }
+
+  return Math.max(1, Math.min(MAX_HYPERBOLA_LEVEL, Math.round(value)));
+}
+
+function getHyperbolaLevels() {
+  const spacing = sanitizeHyperbolaSpacing(state.hyperbolaSpacing);
+  const levels = [];
+
+  for (let level = spacing; level <= MAX_HYPERBOLA_LEVEL; level += spacing) {
+    levels.push(level);
+  }
+
+  return levels;
+}
+
+function getLightConeMarkerStep() {
+  return sanitizeHyperbolaSpacing(state.hyperbolaSpacing);
 }
 
 function renderBeta() {
@@ -172,6 +234,13 @@ function invertDisplayTransform(point) {
 
 function worldToScreen(point) {
   const displayPoint = applyDisplayTransform(point);
+  if (renderViewportOverride) {
+    return {
+      x: (displayPoint.x - renderViewportOverride.xMin) * renderViewportOverride.scale,
+      y: (renderViewportOverride.tMax - displayPoint.t) * renderViewportOverride.scale
+    };
+  }
+
   return {
     x: view.width * 0.5 + displayPoint.x * state.scale,
     y: view.height * 0.5 - displayPoint.t * state.scale
@@ -179,6 +248,13 @@ function worldToScreen(point) {
 }
 
 function referenceWorldToScreen(point) {
+  if (renderViewportOverride) {
+    return {
+      x: (point.x - renderViewportOverride.xMin) * renderViewportOverride.scale,
+      y: (renderViewportOverride.tMax - point.t) * renderViewportOverride.scale
+    };
+  }
+
   return {
     x: view.width * 0.5 + point.x * state.scale,
     y: view.height * 0.5 - point.t * state.scale
@@ -186,6 +262,14 @@ function referenceWorldToScreen(point) {
 }
 
 function screenToWorld(point) {
+  if (renderViewportOverride) {
+    const displayPoint = {
+      x: renderViewportOverride.xMin + point.x / renderViewportOverride.scale,
+      t: renderViewportOverride.tMax - point.y / renderViewportOverride.scale
+    };
+    return invertDisplayTransform(displayPoint);
+  }
+
   const displayPoint = {
     x: (point.x - view.width * 0.5) / state.scale,
     t: (view.height * 0.5 - point.y) / state.scale
@@ -194,6 +278,13 @@ function screenToWorld(point) {
 }
 
 function getReferenceWorldBounds() {
+  if (renderViewportOverride) {
+    return {
+      maxX: Math.max(Math.abs(renderViewportOverride.xMin), Math.abs(renderViewportOverride.xMax)),
+      maxT: Math.max(Math.abs(renderViewportOverride.tMin), Math.abs(renderViewportOverride.tMax))
+    };
+  }
+
   return {
     maxX: view.width * 0.5 / state.scale,
     maxT: view.height * 0.5 / state.scale
@@ -208,10 +299,19 @@ function getWorldBoundsForDisplayAmount(amount) {
     { x: 0, y: view.height },
     { x: view.width, y: view.height }
   ].map((corner) => {
-    const displayPoint = {
-      x: (corner.x - view.width * 0.5) / state.scale,
-      t: (view.height * 0.5 - corner.y) / state.scale
-    };
+    let displayPoint;
+    if (renderViewportOverride) {
+      displayPoint = {
+        x: renderViewportOverride.xMin + corner.x / renderViewportOverride.scale,
+        t: renderViewportOverride.tMax - corner.y / renderViewportOverride.scale
+      };
+    } else {
+      displayPoint = {
+        x: (corner.x - view.width * 0.5) / state.scale,
+        t: (view.height * 0.5 - corner.y) / state.scale
+      };
+    }
+
     return invertDisplayTransformWithMatrix(displayPoint, matrix);
   });
 
@@ -279,6 +379,15 @@ function getBoostedFrameBounds() {
   };
 }
 
+function getCurrentReferenceViewport() {
+  return {
+    xMin: -view.width * 0.5 / state.scale,
+    xMax: view.width * 0.5 / state.scale,
+    tMin: -view.height * 0.5 / state.scale,
+    tMax: view.height * 0.5 / state.scale
+  };
+}
+
 function setCopyDiagramStatus(message, options = {}) {
   const { isError = false, persist = false } = options;
   if (!copyDiagramStatus) {
@@ -338,23 +447,136 @@ function setTutorialOpen(isOpen) {
   tutorialTrigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
 }
 
-async function copyDiagramToClipboard() {
+function openCopyDiagramPopover() {
+  if (!copyDiagramPopover) {
+    return;
+  }
+
+  copyXMinInput.value = DEFAULT_COPY_VIEWPORT.xMin.toFixed(1);
+  copyXMaxInput.value = DEFAULT_COPY_VIEWPORT.xMax.toFixed(1);
+  copyTMinInput.value = DEFAULT_COPY_VIEWPORT.tMin.toFixed(1);
+  copyTMaxInput.value = DEFAULT_COPY_VIEWPORT.tMax.toFixed(1);
+  copyDiagramPopover.hidden = false;
+  setCopyDiagramStatus("");
+  copyXMinInput.focus();
+  copyXMinInput.select();
+}
+
+function closeCopyDiagramPopover() {
+  if (!copyDiagramPopover) {
+    return;
+  }
+
+  copyDiagramPopover.hidden = true;
+}
+
+function syncAxisVisibilityEditControls() {
+  if (axisHideLineModeInput) {
+    axisHideLineModeInput.checked = state.axisVisibilityEdit.lines;
+  }
+  if (axisHideLabelModeInput) {
+    axisHideLabelModeInput.checked = state.axisVisibilityEdit.labels;
+  }
+  if (gridParallelAxisInput) {
+    gridParallelAxisInput.value = state.gridParallelAxis;
+  }
+}
+
+function closeAxisVisibilityPopover() {
+  if (!axisVisibilityPopover) {
+    return;
+  }
+
+  axisVisibilityPopover.hidden = true;
+  state.axisVisibilityEdit.lines = false;
+  state.axisVisibilityEdit.labels = false;
+  syncAxisVisibilityEditControls();
+  axisVisibilityButton?.setAttribute("aria-expanded", "false");
+  syncToolControls();
+}
+
+function openAxisVisibilityPopover() {
+  if (!axisVisibilityPopover) {
+    return;
+  }
+
+  axisVisibilityPopover.hidden = false;
+  axisVisibilityButton?.setAttribute("aria-expanded", "true");
+}
+
+function getCopyDiagramViewport() {
+  const xMin = Number.parseFloat(copyXMinInput.value);
+  const xMax = Number.parseFloat(copyXMaxInput.value);
+  const tMin = Number.parseFloat(copyTMinInput.value);
+  const tMax = Number.parseFloat(copyTMaxInput.value);
+  if (![xMin, xMax, tMin, tMax].every(Number.isFinite)) {
+    throw new Error("Enter numeric crop bounds.");
+  }
+
+  if (xMax <= xMin || tMax <= tMin) {
+    throw new Error("Max bounds must be greater than min bounds.");
+  }
+
+  let exportScale = Math.max(state.scale, 30);
+  let width = Math.max(1, Math.round((xMax - xMin) * exportScale));
+  let height = Math.max(1, Math.round((tMax - tMin) * exportScale));
+  const maxDimension = 2400;
+  const largestDimension = Math.max(width, height);
+  if (largestDimension > maxDimension) {
+    const factor = maxDimension / largestDimension;
+    exportScale *= factor;
+    width = Math.max(1, Math.round((xMax - xMin) * exportScale));
+    height = Math.max(1, Math.round((tMax - tMin) * exportScale));
+  }
+
+  return {
+    xMin,
+    xMax,
+    tMin,
+    tMax,
+    scale: exportScale,
+    width,
+    height
+  };
+}
+
+function renderDiagramToCanvas(targetCanvas, viewport) {
+  const exportContext = targetCanvas.getContext("2d");
+  const previousContext = ctx;
+  const previousWidth = view.width;
+  const previousHeight = view.height;
+  const previousViewportOverride = renderViewportOverride;
+
+  targetCanvas.width = viewport.width;
+  targetCanvas.height = viewport.height;
+  ctx = exportContext;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  view.width = viewport.width;
+  view.height = viewport.height;
+  renderViewportOverride = viewport;
+  draw();
+
+  renderViewportOverride = previousViewportOverride;
+  view.width = previousWidth;
+  view.height = previousHeight;
+  ctx = previousContext;
+  draw();
+}
+
+async function copyDiagramToClipboard(viewport) {
   if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
     setCopyDiagramStatus("Clipboard unavailable", { isError: true });
     return;
   }
 
   copyDiagramButton.disabled = true;
+  confirmCopyDiagramButton.disabled = true;
+  cancelCopyDiagramButton.disabled = true;
   setCopyDiagramStatus("Copying...", { persist: true });
 
   try {
-    draw();
-
     const exportCanvas = document.createElement("canvas");
-    exportCanvas.width = canvas.width;
-    exportCanvas.height = canvas.height;
-    const exportContext = exportCanvas.getContext("2d");
-    exportContext.drawImage(canvas, 0, 0);
+    renderDiagramToCanvas(exportCanvas, viewport);
 
     const blob = await canvasToBlob(exportCanvas);
     if (!blob) {
@@ -367,11 +589,14 @@ async function copyDiagramToClipboard() {
       })
     ]);
     setCopyDiagramStatus("Copied");
+    closeCopyDiagramPopover();
   } catch (error) {
     console.error(error);
-    setCopyDiagramStatus("Copy failed", { isError: true });
+    setCopyDiagramStatus(error.message || "Copy failed", { isError: true });
   } finally {
     copyDiagramButton.disabled = false;
+    confirmCopyDiagramButton.disabled = false;
+    cancelCopyDiagramButton.disabled = false;
   }
 }
 
@@ -435,9 +660,10 @@ function nearestHyperbolaLevel(level) {
     return null;
   }
 
+  const hyperbolaLevels = getHyperbolaLevels();
   let bestLevel = null;
   let bestDelta = Infinity;
-  for (const candidate of HYPERBOLA_LEVELS) {
+  for (const candidate of hyperbolaLevels) {
     const delta = Math.abs(candidate - level);
     if (delta < bestDelta) {
       bestDelta = delta;
@@ -628,6 +854,121 @@ function formatIntervalSquareRoot(metrics) {
   return metrics.absS.toFixed(3);
 }
 
+function axisVisibilityEditActive() {
+  return state.axisVisibilityEdit.lines || state.axisVisibilityEdit.labels;
+}
+
+function axisLineVisible(axisId) {
+  return state.axisVisibility[axisId]?.lineVisible !== false;
+}
+
+function axisLabelVisible(axisId) {
+  return state.axisVisibility[axisId]?.labelVisible !== false;
+}
+
+function resetAxisVisibilityTargets() {
+  axisVisibilityTargets = [];
+}
+
+function registerAxisLineTarget(axisId, start, end) {
+  axisVisibilityTargets.push({
+    type: "line",
+    axisId,
+    start,
+    end
+  });
+}
+
+function registerAxisLabelTarget(axisId, layout) {
+  if (!layout) {
+    return;
+  }
+
+  axisVisibilityTargets.push({
+    type: "label",
+    axisId,
+    left: layout.x - layout.textWidth * 0.5 - 6,
+    right: layout.x + layout.textWidth * 0.5 + 6,
+    top: layout.y - layout.halfHeight - 4,
+    bottom: layout.y + layout.halfHeight + 4
+  });
+}
+
+function findAxisVisibilityTarget(screenPoint) {
+  if (!axisVisibilityEditActive()) {
+    return null;
+  }
+
+  if (state.axisVisibilityEdit.labels) {
+    for (let i = axisVisibilityTargets.length - 1; i >= 0; i -= 1) {
+      const target = axisVisibilityTargets[i];
+      if (target.type !== "label") {
+        continue;
+      }
+
+      if (
+        screenPoint.x >= target.left &&
+        screenPoint.x <= target.right &&
+        screenPoint.y >= target.top &&
+        screenPoint.y <= target.bottom
+      ) {
+        return target;
+      }
+    }
+  }
+
+  if (state.axisVisibilityEdit.lines || state.axisVisibilityEdit.labels) {
+    let bestTarget = null;
+    let bestDistanceSquared = 11 * 11;
+    for (let i = axisVisibilityTargets.length - 1; i >= 0; i -= 1) {
+      const target = axisVisibilityTargets[i];
+      if (target.type !== "line") {
+        continue;
+      }
+
+      const distanceSquared = pointToSegmentDistanceSquared(screenPoint, target.start, target.end);
+      if (distanceSquared <= bestDistanceSquared) {
+        bestDistanceSquared = distanceSquared;
+        bestTarget = target;
+      }
+    }
+
+    return bestTarget;
+  }
+
+  return null;
+}
+
+function hideAxisVisibilityTarget(target) {
+  if (!target) {
+    return false;
+  }
+
+  const axis = state.axisVisibility[target.axisId];
+  if (!axis) {
+    return false;
+  }
+
+  if (state.axisVisibilityEdit.labels && !state.axisVisibilityEdit.lines) {
+    axis.labelVisible = false;
+  } else if (target.type === "line") {
+    axis.lineVisible = false;
+    axis.labelVisible = false;
+  } else if (target.type === "label") {
+    axis.labelVisible = false;
+  } else {
+    return false;
+  }
+
+  draw();
+  return true;
+}
+
+function resetAxisVisibility() {
+  state.axisVisibility = createAxisVisibilityState();
+  draw();
+}
+
 function pointIsAtOrigin(point, epsilon = 1e-6) {
   return Math.abs(point.x) < epsilon && Math.abs(point.t) < epsilon;
 }
@@ -698,12 +1039,26 @@ function collectIntervalMarkers(points, spacing = 1, maxMarkers = 900) {
 }
 
 function syncToolControls() {
+  if (axisVisibilityEditActive()) {
+    canvas.style.cursor = "pointer";
+    return;
+  }
+
+  if (state.activeTool === "move") {
+    canvas.style.cursor = "grab";
+    return;
+  }
+
   if (state.activeTool === "point" || state.activeTool === "eraser") {
     canvas.style.cursor = "crosshair";
     return;
   }
 
   canvas.style.cursor = "default";
+}
+
+function shouldDrawGridFamily(parallelAxisId) {
+  return state.gridParallelAxis === "all" || state.gridParallelAxis === parallelAxisId;
 }
 
 function resizeCanvas() {
@@ -730,24 +1085,28 @@ function drawGrid() {
   ctx.save();
   ctx.lineWidth = 1;
 
-  for (let x = Math.ceil(minX); x <= Math.floor(maxX); x += 1) {
-    const start = worldToScreen({ x, t: -tExtent });
-    const end = worldToScreen({ x, t: tExtent });
-    ctx.strokeStyle = x % 5 === 0 ? "#d5dde3" : "#edf1f4";
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
+  if (shouldDrawGridFamily("referenceT")) {
+    for (let x = Math.ceil(minX); x <= Math.floor(maxX); x += 1) {
+      const start = worldToScreen({ x, t: -tExtent });
+      const end = worldToScreen({ x, t: tExtent });
+      ctx.strokeStyle = x % 5 === 0 ? "#d5dde3" : "#edf1f4";
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    }
   }
 
-  for (let t = Math.ceil(minT); t <= Math.floor(maxT); t += 1) {
-    const start = worldToScreen({ x: -xExtent, t });
-    const end = worldToScreen({ x: xExtent, t });
-    ctx.strokeStyle = t % 5 === 0 ? "#d5dde3" : "#edf1f4";
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
+  if (shouldDrawGridFamily("referenceX")) {
+    for (let t = Math.ceil(minT); t <= Math.floor(maxT); t += 1) {
+      const start = worldToScreen({ x: -xExtent, t });
+      const end = worldToScreen({ x: xExtent, t });
+      ctx.strokeStyle = t % 5 === 0 ? "#d5dde3" : "#edf1f4";
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    }
   }
 
   ctx.restore();
@@ -763,28 +1122,32 @@ function drawBoostedGrid() {
 
   ctx.save();
 
-  for (let t = -tGridLimit; t <= tGridLimit; t += 1) {
-    const start = worldToScreen(lorentz({ x: -xExtent, t }, betaToWorld));
-    const end = worldToScreen(lorentz({ x: xExtent, t }, betaToWorld));
-    const isMajor = t % 5 === 0;
-    ctx.strokeStyle = isMajor ? "rgba(21, 71, 96, 0.18)" : "rgba(21, 71, 96, 0.10)";
-    ctx.lineWidth = isMajor ? 1 : 0.8;
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
+  if (shouldDrawGridFamily("boostedX")) {
+    for (let t = -tGridLimit; t <= tGridLimit; t += 1) {
+      const start = worldToScreen(lorentz({ x: -xExtent, t }, betaToWorld));
+      const end = worldToScreen(lorentz({ x: xExtent, t }, betaToWorld));
+      const isMajor = t % 5 === 0;
+      ctx.strokeStyle = isMajor ? "rgba(21, 71, 96, 0.18)" : "rgba(21, 71, 96, 0.10)";
+      ctx.lineWidth = isMajor ? 1 : 0.8;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    }
   }
 
-  for (let x = -xGridLimit; x <= xGridLimit; x += 1) {
-    const start = worldToScreen(lorentz({ x, t: -tExtent }, betaToWorld));
-    const end = worldToScreen(lorentz({ x, t: tExtent }, betaToWorld));
-    const isMajor = x % 5 === 0;
-    ctx.strokeStyle = isMajor ? "rgba(102, 65, 28, 0.18)" : "rgba(102, 65, 28, 0.10)";
-    ctx.lineWidth = isMajor ? 1 : 0.8;
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
+  if (shouldDrawGridFamily("boostedT")) {
+    for (let x = -xGridLimit; x <= xGridLimit; x += 1) {
+      const start = worldToScreen(lorentz({ x, t: -tExtent }, betaToWorld));
+      const end = worldToScreen(lorentz({ x, t: tExtent }, betaToWorld));
+      const isMajor = x % 5 === 0;
+      ctx.strokeStyle = isMajor ? "rgba(102, 65, 28, 0.18)" : "rgba(102, 65, 28, 0.10)";
+      ctx.lineWidth = isMajor ? 1 : 0.8;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    }
   }
 
   ctx.restore();
@@ -849,14 +1212,14 @@ function drawClampedAxisLabel(text, lineStart, lineEnd, options = {}) {
   } = options;
   const clippedSegment = clipScreenSegmentToInsetRect(lineStart, lineEnd, inset);
   if (!clippedSegment) {
-    return;
+    return null;
   }
 
   const dx = clippedSegment.end.x - clippedSegment.start.x;
   const dy = clippedSegment.end.y - clippedSegment.start.y;
   const length = Math.hypot(dx, dy);
   if (length < 1e-6) {
-    return;
+    return null;
   }
 
   const direction = {
@@ -890,6 +1253,12 @@ function drawClampedAxisLabel(text, lineStart, lineEnd, options = {}) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, x, y);
+  return {
+    x,
+    y,
+    textWidth,
+    halfHeight
+  };
 }
 
 function drawAxes() {
@@ -924,50 +1293,85 @@ function drawAxes() {
   const tStart = worldToScreen(transformedTAxis[0]);
   const tEnd = worldToScreen(transformedTAxis[1]);
   const origin = worldToScreen(lorentz({ x: 0, t: 0 }, beta));
+  const showBoostedAxes = Math.abs(beta) > 1e-6;
+  const anyAxisLineVisible = (
+    axisLineVisible("referenceX") ||
+    axisLineVisible("referenceT") ||
+    (showBoostedAxes && axisLineVisible("boostedX")) ||
+    (showBoostedAxes && axisLineVisible("boostedT"))
+  );
 
   ctx.save();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "#154760";
-  ctx.beginPath();
-  ctx.moveTo(xStart.x, xStart.y);
-  ctx.lineTo(xEnd.x, xEnd.y);
-  ctx.stroke();
-
-  ctx.strokeStyle = "#66411c";
-  ctx.beginPath();
-  ctx.moveTo(tStart.x, tStart.y);
-  ctx.lineTo(tEnd.x, tEnd.y);
-  ctx.stroke();
-
-  ctx.fillStyle = "#1f2f3a";
-  ctx.beginPath();
-  ctx.arc(origin.x, origin.y, 2.8, 0, Math.PI * 2);
-  ctx.fill();
-
-  const showBoostedAxisLabels = Math.abs(beta) > 1e-6;
-  if (showBoostedAxisLabels) {
-    ctx.font = "20px IBM Plex Sans, Segoe UI, sans-serif";
-    ctx.fillStyle = "#154760";
-    drawClampedAxisLabel("x'", xStart, xEnd, { alongOffset: 18, normalOffset: 12 });
-    ctx.fillStyle = "#66411c";
-    drawClampedAxisLabel("t'", tStart, tEnd, { alongOffset: 18, normalOffset: 12 });
+  if (showBoostedAxes && axisLineVisible("boostedX")) {
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#154760";
+    ctx.beginPath();
+    ctx.moveTo(xStart.x, xStart.y);
+    ctx.lineTo(xEnd.x, xEnd.y);
+    ctx.stroke();
+    registerAxisLineTarget("boostedX", xStart, xEnd);
   }
 
-  ctx.setLineDash([8, 4]);
-  ctx.strokeStyle = "rgba(58, 68, 76, 0.72)";
-  ctx.lineWidth = 2.4;
-  ctx.beginPath();
-  ctx.moveTo(refXStart.x, refXStart.y);
-  ctx.lineTo(refXEnd.x, refXEnd.y);
-  ctx.moveTo(refTStart.x, refTStart.y);
-  ctx.lineTo(refTEnd.x, refTEnd.y);
-  ctx.stroke();
+  if (showBoostedAxes && axisLineVisible("boostedT")) {
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#66411c";
+    ctx.beginPath();
+    ctx.moveTo(tStart.x, tStart.y);
+    ctx.lineTo(tEnd.x, tEnd.y);
+    ctx.stroke();
+    registerAxisLineTarget("boostedT", tStart, tEnd);
+  }
+
+  if (anyAxisLineVisible) {
+    ctx.fillStyle = "#1f2f3a";
+    ctx.beginPath();
+    ctx.arc(origin.x, origin.y, 2.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (showBoostedAxes && axisLabelVisible("boostedX")) {
+    ctx.font = "20px IBM Plex Sans, Segoe UI, sans-serif";
+    ctx.fillStyle = "#154760";
+    const boostedXLabel = drawClampedAxisLabel("x'", xStart, xEnd, { alongOffset: 18, normalOffset: 12 });
+    registerAxisLabelTarget("boostedX", boostedXLabel);
+  }
+
+  if (showBoostedAxes && axisLabelVisible("boostedT")) {
+    ctx.font = "20px IBM Plex Sans, Segoe UI, sans-serif";
+    ctx.fillStyle = "#66411c";
+    const boostedTLabel = drawClampedAxisLabel("t'", tStart, tEnd, { alongOffset: 18, normalOffset: 12 });
+    registerAxisLabelTarget("boostedT", boostedTLabel);
+  }
+
+  if (axisLineVisible("referenceX") || axisLineVisible("referenceT")) {
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = "rgba(58, 68, 76, 0.72)";
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    if (axisLineVisible("referenceX")) {
+      ctx.moveTo(refXStart.x, refXStart.y);
+      ctx.lineTo(refXEnd.x, refXEnd.y);
+      registerAxisLineTarget("referenceX", refXStart, refXEnd);
+    }
+    if (axisLineVisible("referenceT")) {
+      ctx.moveTo(refTStart.x, refTStart.y);
+      ctx.lineTo(refTEnd.x, refTEnd.y);
+      registerAxisLineTarget("referenceT", refTStart, refTEnd);
+    }
+    ctx.stroke();
+  }
 
   ctx.setLineDash([]);
   ctx.fillStyle = "rgba(58, 68, 76, 0.9)";
   ctx.font = "17px IBM Plex Sans, Segoe UI, sans-serif";
-  drawClampedAxisLabel("x", refXStart, refXEnd, { alongOffset: 18, normalOffset: 12 });
-  drawClampedAxisLabel("t", refTStart, refTEnd, { alongOffset: 18, normalOffset: 12 });
+  if (axisLabelVisible("referenceX")) {
+    const referenceXLabel = drawClampedAxisLabel("x", refXStart, refXEnd, { alongOffset: 18, normalOffset: 12 });
+    registerAxisLabelTarget("referenceX", referenceXLabel);
+  }
+  if (axisLabelVisible("referenceT")) {
+    const referenceTLabel = drawClampedAxisLabel("t", refTStart, refTEnd, { alongOffset: 18, normalOffset: 12 });
+    registerAxisLabelTarget("referenceT", referenceTLabel);
+  }
   ctx.restore();
 }
 
@@ -1051,14 +1455,18 @@ function drawAxisCoordinateValuesForAxis(getScreenPointForValue, color) {
 
 function drawAxisCoordinateValues() {
   const beta = renderBeta();
-  drawAxisCoordinateValuesForAxis(
-    (value) => worldToScreen(lorentz({ x: value, t: 0 }, beta)),
-    "rgba(21, 71, 96, 0.88)"
-  );
-  drawAxisCoordinateValuesForAxis(
-    (value) => worldToScreen(lorentz({ x: 0, t: value }, beta)),
-    "rgba(102, 65, 28, 0.88)"
-  );
+  if (axisLineVisible("boostedX") && axisLabelVisible("boostedX")) {
+    drawAxisCoordinateValuesForAxis(
+      (value) => worldToScreen(lorentz({ x: value, t: 0 }, beta)),
+      "rgba(21, 71, 96, 0.88)"
+    );
+  }
+  if (axisLineVisible("boostedT") && axisLabelVisible("boostedT")) {
+    drawAxisCoordinateValuesForAxis(
+      (value) => worldToScreen(lorentz({ x: 0, t: value }, beta)),
+      "rgba(102, 65, 28, 0.88)"
+    );
+  }
 }
 
 function canShowReferenceAxisCoordinateValues() {
@@ -1082,14 +1490,18 @@ function canShowReferenceAxisCoordinateValues() {
 
 function drawReferenceAxisCoordinateValues() {
   const color = "rgba(58, 68, 76, 0.88)";
-  drawAxisCoordinateValuesForAxis(
-    (value) => worldToScreen({ x: value, t: 0 }),
-    color
-  );
-  drawAxisCoordinateValuesForAxis(
-    (value) => worldToScreen({ x: 0, t: value }),
-    color
-  );
+  if (axisLineVisible("referenceX") && axisLabelVisible("referenceX")) {
+    drawAxisCoordinateValuesForAxis(
+      (value) => worldToScreen({ x: value, t: 0 }),
+      color
+    );
+  }
+  if (axisLineVisible("referenceT") && axisLabelVisible("referenceT")) {
+    drawAxisCoordinateValuesForAxis(
+      (value) => worldToScreen({ x: 0, t: value }),
+      color
+    );
+  }
 }
 
 function drawLightCones() {
@@ -1144,8 +1556,9 @@ function drawHyperboles() {
   const { xExtent, tExtent: baseTExtent } = getStableHyperbolaExtents();
   const dx = 0.04;
   const dt = 0.04;
+  const hyperbolaLevels = getHyperbolaLevels();
 
-  for (const a of HYPERBOLA_LEVELS) {
+  for (const a of hyperbolaLevels) {
     const timelikeTop = [];
     const timelikeBottom = [];
 
@@ -1175,7 +1588,7 @@ function drawHyperboles() {
 }
 
 function getHyperbolaMarkerRapidities(xExtent) {
-  const minLevel = HYPERBOLA_LEVELS[0] ?? 1;
+  const minLevel = getHyperbolaLevels()[0] ?? 1;
   const etaMax = Math.asinh(xExtent / Math.max(minLevel, 1e-6));
   const sampleCount = Math.max(1, Math.ceil(etaMax / HYPERBOLA_MARKER_RAPIDITY_STEP));
   const rapidities = [];
@@ -1191,8 +1604,9 @@ function getHyperbolaMarkerData() {
   const markers = [];
   const { xExtent, tExtent } = getStableHyperbolaExtents();
   const rayRapidities = getHyperbolaMarkerRapidities(xExtent);
+  const hyperbolaLevels = getHyperbolaLevels();
 
-  for (const level of HYPERBOLA_LEVELS) {
+  for (const level of hyperbolaLevels) {
     // Shared rapidity samples make the marker families align along rays from the origin.
     for (const eta of rayRapidities) {
       const sinhEta = Math.sinh(eta);
@@ -1224,9 +1638,10 @@ function getHyperbolaMarkerData() {
   }
 
   const coneExtent = Math.max(xExtent, tExtent);
-  const maxConeLevel = Math.ceil(coneExtent / LIGHT_CONE_MARKER_STEP) * LIGHT_CONE_MARKER_STEP;
+  const coneMarkerStep = getLightConeMarkerStep();
+  const maxConeLevel = Math.ceil(coneExtent / coneMarkerStep) * coneMarkerStep;
 
-  for (let level = LIGHT_CONE_MARKER_STEP; level <= maxConeLevel; level += LIGHT_CONE_MARKER_STEP) {
+  for (let level = coneMarkerStep; level <= maxConeLevel; level += coneMarkerStep) {
     const lightConePoints = [
       { x: level, t: level },
       { x: -level, t: level },
@@ -1557,6 +1972,7 @@ function drawOverlay() {
 }
 
 function draw() {
+  resetAxisVisibilityTargets();
   ctx.clearRect(0, 0, view.width, view.height);
   if (state.showReferenceGrid) {
     drawGrid();
@@ -1583,9 +1999,6 @@ function draw() {
     drawBoostedPointGuides();
   }
   drawStrokes();
-  if (!state.hideAxesAndLines) {
-    drawIntervalMarkers();
-  }
   if (!state.hideAxesAndLines && state.showLineLengths) {
     drawLineLengthLabels();
   }
@@ -1617,6 +2030,14 @@ function startStroke(event) {
 
   const screenPoint = eventToScreenPoint(event);
   const point = eventToBaseFramePoint(event);
+  if (axisVisibilityEditActive()) {
+    const axisTarget = findAxisVisibilityTarget(screenPoint);
+    if (axisTarget) {
+      hideAxisVisibilityTarget(axisTarget);
+    }
+    return;
+  }
+
   if (state.activeTool === "eraser") {
     state.draggingShape = false;
     state.drawing = true;
@@ -1628,7 +2049,7 @@ function startStroke(event) {
     return;
   }
 
-  const dragRequested = event.shiftKey;
+  const dragRequested = event.shiftKey || state.activeTool === "move";
   if (dragRequested) {
     const hitIndex = findTopmostStrokeAtScreenPoint(screenPoint);
     if (hitIndex !== -1) {
@@ -1640,6 +2061,11 @@ function startStroke(event) {
       state.lastDragPoint = point;
       state.currentGroupId = null;
       canvas.setPointerCapture(event.pointerId);
+      canvas.style.cursor = "grabbing";
+      return;
+    }
+
+    if (state.activeTool === "move") {
       return;
     }
   }
@@ -1758,6 +2184,7 @@ function endStroke(event) {
     state.currentGroupId = null;
     state.drawMode = null;
     canvas.releasePointerCapture(event.pointerId);
+    syncToolControls();
     draw();
     return;
   }
@@ -1790,6 +2217,7 @@ function endStroke(event) {
   state.currentPointerId = null;
   state.currentGroupId = null;
   canvas.releasePointerCapture(event.pointerId);
+  syncToolControls();
   draw();
 }
 
@@ -1826,12 +2254,21 @@ function syncRectifyControls() {
   syncRectifyLabels();
 }
 
-function syncHyperbolaClipControls() {
+function syncHyperbolaControls() {
   const shouldShow = state.showHyperboles;
   hyperbolaClipLabel.classList.toggle("is-hidden", !shouldShow);
   hyperbolaClipLabel.hidden = !shouldShow;
   hyperbolaClipLabel.setAttribute("aria-hidden", shouldShow ? "false" : "true");
   clipToHyperbolaeInput.disabled = !state.showHyperboles;
+  hyperbolaSpacingLabel?.classList.toggle("is-hidden", !shouldShow);
+  if (hyperbolaSpacingLabel) {
+    hyperbolaSpacingLabel.hidden = !shouldShow;
+    hyperbolaSpacingLabel.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+  }
+  if (hyperbolaSpacingInput) {
+    hyperbolaSpacingInput.disabled = !shouldShow;
+    hyperbolaSpacingInput.value = String(sanitizeHyperbolaSpacing(state.hyperbolaSpacing));
+  }
 }
 
 function removeLastShapeGroup() {
@@ -1952,12 +2389,20 @@ showHyperbolesInput.addEventListener("change", () => {
     state.clipToHyperbolae = false;
     clipToHyperbolaeInput.checked = false;
   }
-  syncHyperbolaClipControls();
+  syncHyperbolaControls();
   draw();
 });
 
 clipToHyperbolaeInput.addEventListener("change", () => {
   state.clipToHyperbolae = clipToHyperbolaeInput.checked;
+});
+
+hyperbolaSpacingInput?.addEventListener("change", () => {
+  state.hyperbolaSpacing = sanitizeHyperbolaSpacing(
+    Number.parseFloat(hyperbolaSpacingInput.value)
+  );
+  syncHyperbolaControls();
+  draw();
 });
 
 showHyperbolaPointsInput.addEventListener("change", () => {
@@ -2024,7 +2469,64 @@ clearButton.addEventListener("click", () => {
 });
 
 copyDiagramButton.addEventListener("click", () => {
-  copyDiagramToClipboard();
+  if (copyDiagramPopover?.hidden === false) {
+    closeCopyDiagramPopover();
+    return;
+  }
+
+  closeAxisVisibilityPopover();
+  openCopyDiagramPopover();
+});
+
+confirmCopyDiagramButton?.addEventListener("click", () => {
+  try {
+    const viewport = getCopyDiagramViewport();
+    copyDiagramToClipboard(viewport);
+  } catch (error) {
+    setCopyDiagramStatus(error.message || "Invalid crop bounds", { isError: true });
+  }
+});
+
+cancelCopyDiagramButton?.addEventListener("click", () => {
+  closeCopyDiagramPopover();
+  setCopyDiagramStatus("");
+});
+
+axisVisibilityButton?.addEventListener("click", () => {
+  if (axisVisibilityPopover?.hidden === false) {
+    closeAxisVisibilityPopover();
+    return;
+  }
+
+  closeCopyDiagramPopover();
+  openAxisVisibilityPopover();
+});
+
+axisHideLineModeInput?.addEventListener("change", () => {
+  state.axisVisibilityEdit.lines = axisHideLineModeInput.checked;
+  if (axisHideLineModeInput.checked) {
+    state.axisVisibilityEdit.labels = false;
+  }
+  syncAxisVisibilityEditControls();
+  syncToolControls();
+});
+
+axisHideLabelModeInput?.addEventListener("change", () => {
+  state.axisVisibilityEdit.labels = axisHideLabelModeInput.checked;
+  if (axisHideLabelModeInput.checked) {
+    state.axisVisibilityEdit.lines = false;
+  }
+  syncAxisVisibilityEditControls();
+  syncToolControls();
+});
+
+gridParallelAxisInput?.addEventListener("change", () => {
+  state.gridParallelAxis = gridParallelAxisInput.value || "all";
+  draw();
+});
+
+resetAxisVisibilityButton?.addEventListener("click", () => {
+  resetAxisVisibility();
 });
 
 tutorialPopover?.addEventListener("mouseenter", () => {
@@ -2056,13 +2558,41 @@ tutorialTrigger?.addEventListener("click", () => {
 
 document.addEventListener("pointerdown", (event) => {
   if (!tutorialPopover || tutorialPanel?.hidden || tutorialPopover.contains(event.target)) {
+  } else {
+    setTutorialOpen(false);
+  }
+
+  if (
+    !copyDiagramPopover ||
+    copyDiagramPopover.hidden ||
+    copyDiagramPopover.contains(event.target) ||
+    copyDiagramButton.contains(event.target)
+  ) {
     return;
   }
 
-  setTutorialOpen(false);
+  closeCopyDiagramPopover();
 });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    if (axisVisibilityPopover && !axisVisibilityPopover.hidden) {
+      closeAxisVisibilityPopover();
+      return;
+    }
+
+    if (copyDiagramPopover && !copyDiagramPopover.hidden) {
+      closeCopyDiagramPopover();
+      setCopyDiagramStatus("");
+      return;
+    }
+
+    if (tutorialPanel && !tutorialPanel.hidden) {
+      setTutorialOpen(false);
+      return;
+    }
+  }
+
   const isDeleteKey = event.key === "Backspace" || event.key === "Delete";
   if (!isDeleteKey) {
     return;
@@ -2087,9 +2617,10 @@ rectifyViewInput.checked = state.rectifyViewEnabled;
 clipToHyperbolaeInput.checked = state.clipToHyperbolae;
 showHyperbolaPointsInput.checked = state.showHyperbolaPoints;
 hideAxesAndLinesInput.checked = state.hideAxesAndLines;
+syncAxisVisibilityEditControls();
 syncToolControls();
 syncLastUpdatedNote();
 syncVelocityLabels();
 syncRectifyControls();
-syncHyperbolaClipControls();
+syncHyperbolaControls();
 resizeCanvas();

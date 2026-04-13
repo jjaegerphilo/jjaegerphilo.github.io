@@ -83,6 +83,77 @@ body {
   color: #b33b42;
 }
 
+.copy-diagram-popover {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.7rem;
+  margin: -0.05rem 0 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 18px rgba(20, 34, 45, 0.06);
+}
+
+.copy-diagram-popover[hidden] {
+  display: none !important;
+}
+
+.copy-diagram-title {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: 0.2rem;
+}
+
+.copy-range-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.copy-range-field input {
+  width: 5.3rem;
+  border: 1px solid #b8c2c9;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.22rem 0.34rem;
+}
+
+.copy-diagram-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.axis-visibility-popover {
+  gap: 0.5rem 0.9rem;
+}
+
+.axis-visibility-popover .check {
+  display: inline-flex;
+  width: auto;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.axis-visibility-popover .axis-grid-filter {
+  display: inline-flex;
+  width: auto;
+  white-space: nowrap;
+}
+
+.axis-visibility-popover .axis-grid-filter select {
+  min-width: 8.8rem;
+}
+
 input[type="range"] {
   width: min(420px, 72vw);
 }
@@ -191,6 +262,18 @@ select {
 }
 
 .clip-toggle.is-hidden {
+  display: none !important;
+}
+
+.hyperbola-spacing {
+  margin-bottom: 0.18rem;
+}
+
+.hyperbola-spacing input {
+  width: 4.1rem;
+}
+
+.hyperbola-spacing.is-hidden {
   display: none !important;
 }
 
