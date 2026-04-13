@@ -134,6 +134,9 @@ body {
 }
 
 .axis-visibility-popover {
+  position: relative;
+  z-index: 6;
+  pointer-events: auto !important;
   gap: 0.5rem 0.9rem;
 }
 
@@ -266,11 +269,19 @@ select {
 }
 
 .hyperbola-spacing {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto !important;
   margin-bottom: 0.18rem;
+  font-size: 0.8rem !important;
+  white-space: nowrap;
 }
 
 .hyperbola-spacing input {
-  width: 4.1rem;
+  width: 3.4rem;
+  padding: 0.14rem 0.24rem;
+  font-size: 0.8rem;
 }
 
 .hyperbola-spacing.is-hidden {

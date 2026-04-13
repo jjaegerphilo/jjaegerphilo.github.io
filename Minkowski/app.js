@@ -482,16 +482,24 @@ function syncAxisVisibilityEditControls() {
   }
 }
 
+function setAxisVisibilityPopoverOpen(isOpen) {
+  if (!axisVisibilityPopover) {
+    return;
+  }
+
+  axisVisibilityPopover.hidden = !isOpen;
+  axisVisibilityButton?.setAttribute("aria-expanded", isOpen ? "true" : "false");
+}
+
 function closeAxisVisibilityPopover() {
   if (!axisVisibilityPopover) {
     return;
   }
 
-  axisVisibilityPopover.hidden = true;
+  setAxisVisibilityPopoverOpen(false);
   state.axisVisibilityEdit.lines = false;
   state.axisVisibilityEdit.labels = false;
   syncAxisVisibilityEditControls();
-  axisVisibilityButton?.setAttribute("aria-expanded", "false");
   syncToolControls();
 }
 
@@ -500,8 +508,8 @@ function openAxisVisibilityPopover() {
     return;
   }
 
-  axisVisibilityPopover.hidden = false;
-  axisVisibilityButton?.setAttribute("aria-expanded", "true");
+  setAxisVisibilityPopoverOpen(true);
+  axisHideLineModeInput?.focus();
 }
 
 function getCopyDiagramViewport() {
@@ -2264,6 +2272,7 @@ function syncHyperbolaControls() {
   if (hyperbolaSpacingLabel) {
     hyperbolaSpacingLabel.hidden = !shouldShow;
     hyperbolaSpacingLabel.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+    hyperbolaSpacingLabel.style.display = shouldShow ? "inline-flex" : "none";
   }
   if (hyperbolaSpacingInput) {
     hyperbolaSpacingInput.disabled = !shouldShow;
@@ -2492,7 +2501,12 @@ cancelCopyDiagramButton?.addEventListener("click", () => {
   setCopyDiagramStatus("");
 });
 
-axisVisibilityButton?.addEventListener("click", () => {
+axisVisibilityButton?.addEventListener("pointerdown", (event) => {
+  event.stopPropagation();
+});
+
+axisVisibilityButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
   if (axisVisibilityPopover?.hidden === false) {
     closeAxisVisibilityPopover();
     return;
@@ -2529,6 +2543,10 @@ resetAxisVisibilityButton?.addEventListener("click", () => {
   resetAxisVisibility();
 });
 
+axisVisibilityPopover?.addEventListener("pointerdown", (event) => {
+  event.stopPropagation();
+});
+
 tutorialPopover?.addEventListener("mouseenter", () => {
   setTutorialOpen(true);
 });
@@ -2560,6 +2578,15 @@ document.addEventListener("pointerdown", (event) => {
   if (!tutorialPopover || tutorialPanel?.hidden || tutorialPopover.contains(event.target)) {
   } else {
     setTutorialOpen(false);
+  }
+
+  if (
+    axisVisibilityPopover &&
+    !axisVisibilityPopover.hidden &&
+    !axisVisibilityPopover.contains(event.target) &&
+    !axisVisibilityButton.contains(event.target)
+  ) {
+    closeAxisVisibilityPopover();
   }
 
   if (
