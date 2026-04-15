@@ -16,6 +16,7 @@
         <select id="drawTool">
           <option value="point">Point</option>
           <option value="line" selected>Straight line</option>
+          <option value="text">Text</option>
           <option value="move">Move object</option>
           <option value="eraser">Eraser</option>
         </select>
@@ -274,6 +275,7 @@
         </button>
         <p id="tutorialPanel" class="hint tutorial-panel" role="note" hidden>
           Use Point to drop an event marker. Use Straight line by click-dragging.
+          Use Text to place small boxed labels onto the diagram.
           Use Move object to grab existing geometry and drag it elsewhere.
           Use Eraser to remove shapes by click or drag.
           Use Axes to temporarily hide individual axis lines or labels by clicking on them, or to show only grid lines parallel to one chosen axis.
@@ -291,6 +293,13 @@
     </header>
     <main class="canvas-wrap">
       <canvas id="diagram"></canvas>
+      <div id="textEditorPopover" class="canvas-text-editor" hidden>
+        <input id="textEditorInput" type="text" maxlength="120" placeholder="Diagram label" aria-label="Diagram label text" />
+        <div class="canvas-text-editor-actions">
+          <button id="confirmTextLabel" type="button">Place</button>
+          <button id="cancelTextLabel" type="button">Cancel</button>
+        </div>
+      </div>
       <div class="formula-badge" aria-label="Minkowski interval reminder">
         <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline" aria-label="d of p comma q equals the square root of t sub p minus t sub q squared minus x sub p minus x sub q squared">
           <mi>d</mi>

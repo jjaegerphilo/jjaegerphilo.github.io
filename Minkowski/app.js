@@ -1,5 +1,6 @@
 const canvas = document.getElementById("diagram");
 let ctx = canvas.getContext("2d");
+const canvasWrap = document.querySelector(".canvas-wrap");
 
 const betaInput = document.getElementById("beta");
 const betaValue = document.getElementById("betaValue");
@@ -47,6 +48,10 @@ const showBoostedGridInput = document.getElementById("showBoostedGrid");
 const undoButton = document.getElementById("undo");
 const clearButton = document.getElementById("clear");
 const copyDiagramButton = document.getElementById("copyDiagram");
+const textEditorPopover = document.getElementById("textEditorPopover");
+const textEditorInput = document.getElementById("textEditorInput");
+const confirmTextLabelButton = document.getElementById("confirmTextLabel");
+const cancelTextLabelButton = document.getElementById("cancelTextLabel");
 const copyDiagramStatus = document.getElementById("copyDiagramStatus");
 const copyDiagramPopover = document.getElementById("copyDiagramPopover");
 const copyXMinInput = document.getElementById("copyXMin");
@@ -120,6 +125,11 @@ const state = {
   axisVisibility: createAxisVisibilityState(),
   gridParallelAxis: "all",
   showBoostedGrid: false,
+  textEditor: {
+    open: false,
+    point: null,
+    strokeIndex: -1
+  },
   strokes: [],
   drawing: false,
   drawMode: null,
@@ -142,6 +152,11 @@ let axisVisibilityTargets = [];
 let twinCurveCache = null;
 
 const DEFAULT_HYPERBOLA_SPACING = 2;
+const TEXT_STROKE_FONT_SIZE = 11;
+const TEXT_STROKE_FONT = `${TEXT_STROKE_FONT_SIZE}px IBM Plex Sans, Segoe UI, sans-serif`;
+const TEXT_STROKE_PADDING_X = 5;
+const TEXT_STROKE_PADDING_Y = 4;
+const TEXT_STROKE_LINE_HEIGHT = 14;
 const MAX_HYPERBOLA_LEVEL = 21;
 const MIN_HYPERBOLA_X_EXTENT = 21;
 const HYPERBOLA_MARKER_RAPIDITY_STEP = 0.45;
@@ -1080,6 +1095,139 @@ function closeCopyDiagramPopover() {
   copyDiagramPopover.hidden = true;
 }
 
+function getTextStrokeLayout(stroke, context = ctx) {
+  if (!stroke || stroke.kind !== "text" || !stroke.points?.length) {
+    return null;
+  }
+
+  const anchor = worldToScreen(stroke.points[0]);
+  const text = String(stroke.text || "").trim();
+  if (!text) {
+    return null;
+  }
+
+  context.save();
+  context.font = stroke.style?.font || TEXT_STROKE_FONT;
+  const width = context.measureText(text).width;
+  context.restore();
+
+  return {
+    anchor,
+    text,
+    width,
+    height: TEXT_STROKE_FONT_SIZE,
+    box: {
+      x: anchor.x,
+      y: anchor.y,
+      width: width + TEXT_STROKE_PADDING_X * 2,
+      height: TEXT_STROKE_LINE_HEIGHT + TEXT_STROKE_PADDING_Y * 2 - 1
+    }
+  };
+}
+
+function positionTextEditorPopover() {
+  if (!textEditorPopover || !state.textEditor.open || !state.textEditor.point) {
+    return;
+  }
+
+  const screenPoint = worldToScreen(state.textEditor.point);
+  const wrapRect = canvasWrap?.getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
+  if (!wrapRect || !canvasRect) {
+    return;
+  }
+
+  const offsetLeft = canvasRect.left - wrapRect.left;
+  const offsetTop = canvasRect.top - wrapRect.top;
+  const popoverWidth = textEditorPopover.offsetWidth || 176;
+  const popoverHeight = textEditorPopover.offsetHeight || 74;
+  const maxLeft = Math.max(8, canvas.clientWidth - popoverWidth - 8);
+  const maxTop = Math.max(8, canvas.clientHeight - popoverHeight - 8);
+  const left = offsetLeft + Math.max(8, Math.min(screenPoint.x + 10, maxLeft));
+  const top = offsetTop + Math.max(8, Math.min(screenPoint.y + 10, maxTop));
+
+  textEditorPopover.style.left = `${left}px`;
+  textEditorPopover.style.top = `${top}px`;
+}
+
+function openTextEditor(point, options = {}) {
+  if (!textEditorPopover || !textEditorInput) {
+    return;
+  }
+
+  const { strokeIndex = -1, initialText = "" } = options;
+  state.textEditor.open = true;
+  state.textEditor.point = { ...point };
+  state.textEditor.strokeIndex = strokeIndex;
+  textEditorPopover.hidden = false;
+  textEditorInput.value = initialText;
+  positionTextEditorPopover();
+  textEditorInput.focus();
+  textEditorInput.select();
+}
+
+function closeTextEditor() {
+  if (!textEditorPopover) {
+    return;
+  }
+
+  state.textEditor.open = false;
+  state.textEditor.point = null;
+  state.textEditor.strokeIndex = -1;
+  textEditorPopover.hidden = true;
+}
+
+function commitTextEditor() {
+  if (!state.textEditor.open || !textEditorInput) {
+    return;
+  }
+
+  const text = textEditorInput.value.trim();
+  const strokeIndex = state.textEditor.strokeIndex;
+  const anchorPoint = state.textEditor.point ? { ...state.textEditor.point } : null;
+
+  if (!text || !anchorPoint) {
+    if (strokeIndex >= 0 && strokeIndex < state.strokes.length && !text) {
+      state.strokes.splice(strokeIndex, 1);
+    }
+    closeTextEditor();
+    draw();
+    return;
+  }
+
+  if (strokeIndex >= 0 && strokeIndex < state.strokes.length) {
+    const stroke = state.strokes[strokeIndex];
+    if (stroke?.kind === "text") {
+      stroke.text = text;
+      stroke.points[0] = anchorPoint;
+      stroke.style = {
+        ...(stroke.style || {}),
+        color: state.strokeColor,
+        font: TEXT_STROKE_FONT,
+        fontSize: TEXT_STROKE_FONT_SIZE
+      };
+    }
+  } else {
+    const groupId = state.nextGroupId;
+    state.nextGroupId += 1;
+    state.strokes.push({
+      points: [anchorPoint],
+      kind: "text",
+      text,
+      groupId,
+      style: {
+        color: state.strokeColor,
+        font: TEXT_STROKE_FONT,
+        fontSize: TEXT_STROKE_FONT_SIZE,
+        dash: []
+      }
+    });
+  }
+
+  closeTextEditor();
+  draw();
+}
+
 function syncAxisVisibilityEditControls() {
   if (axisHideLineModeInput) {
     axisHideLineModeInput.checked = state.axisVisibilityEdit.lines;
@@ -1370,9 +1518,23 @@ function pointToSegmentDistanceSquared(point, a, b) {
   return pointDistanceSquared(point, projection);
 }
 
+function pointToRectDistanceSquared(point, rect) {
+  const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width));
+  const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height));
+  return dx * dx + dy * dy;
+}
+
 function transformedStrokeScreenDistance(stroke, screenPoint) {
   if (!stroke || !stroke.points.length) {
     return Infinity;
+  }
+
+  if (stroke.kind === "text") {
+    const layout = getTextStrokeLayout(stroke);
+    if (!layout) {
+      return Infinity;
+    }
+    return Math.sqrt(pointToRectDistanceSquared(screenPoint, layout.box));
   }
 
   const screenPoints = stroke.points.map((p) => worldToScreen(p));
@@ -1396,7 +1558,7 @@ function canRenderStroke(stroke) {
     return false;
   }
 
-  return !(state.hideAxesAndLines && stroke.kind === "line");
+  return !(state.hideAxesAndLines && (stroke.kind === "line" || stroke.kind === "text"));
 }
 
 function findTopmostStrokeAtScreenPoint(screenPoint, thresholdPx = 10) {
@@ -1667,6 +1829,11 @@ function syncToolControls() {
     return;
   }
 
+  if (state.activeTool === "text") {
+    canvas.style.cursor = "text";
+    return;
+  }
+
   if (state.activeTool === "point" || state.activeTool === "eraser") {
     canvas.style.cursor = "crosshair";
     return;
@@ -1691,6 +1858,7 @@ function resizeCanvas() {
   canvas.height = Math.max(1, Math.round(rect.height * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw();
+  positionTextEditorPopover();
 }
 
 function drawGrid() {
@@ -2814,6 +2982,32 @@ function drawStrokes() {
     ctx.lineWidth = style.width ?? 2.2;
     ctx.setLineDash(style.dash || []);
 
+    if (stroke.kind === "text") {
+      const layout = getTextStrokeLayout(stroke);
+      if (!layout) {
+        continue;
+      }
+
+      ctx.save();
+      ctx.font = style.font || TEXT_STROKE_FONT;
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+      ctx.strokeStyle = "rgba(40, 55, 66, 0.24)";
+      ctx.beginPath();
+      ctx.rect(layout.box.x, layout.box.y, layout.box.width, layout.box.height);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = strokeColor;
+      ctx.fillText(
+        layout.text,
+        layout.box.x + TEXT_STROKE_PADDING_X,
+        layout.box.y + TEXT_STROKE_PADDING_Y + TEXT_STROKE_FONT_SIZE
+      );
+      ctx.restore();
+      continue;
+    }
+
     if (points.length === 1) {
       const dot = worldToScreen(points[0]);
       const radius = stroke.kind === "point" ? 4.2 : 2.2;
@@ -3185,6 +3379,24 @@ function startStroke(event) {
     state.currentGroupId = null;
     canvas.setPointerCapture(event.pointerId);
     removeShapeGroupAtScreenPoint(screenPoint);
+    return;
+  }
+
+  if (state.activeTool === "text") {
+    if (state.textEditor.open) {
+      return;
+    }
+
+    const hitIndex = findTopmostStrokeAtScreenPoint(screenPoint, 12);
+    const hitStroke = hitIndex >= 0 ? state.strokes[hitIndex] : null;
+    if (hitStroke?.kind === "text") {
+      openTextEditor(hitStroke.points[0], {
+        strokeIndex: hitIndex,
+        initialText: hitStroke.text || ""
+      });
+    } else {
+      openTextEditor(point);
+    }
     return;
   }
 
@@ -3911,6 +4123,7 @@ showBoostedGridInput.addEventListener("change", () => {
 
 drawToolInput.addEventListener("change", () => {
   state.activeTool = drawToolInput.value;
+  closeTextEditor();
   syncToolControls();
 });
 
@@ -3923,11 +4136,13 @@ undoButton.addEventListener("click", () => {
 });
 
 clearButton.addEventListener("click", () => {
+  closeTextEditor();
   state.strokes = [];
   draw();
 });
 
 copyDiagramButton.addEventListener("click", () => {
+  closeTextEditor();
   if (copyDiagramPopover?.hidden === false) {
     closeCopyDiagramPopover();
     return;
@@ -3957,6 +4172,7 @@ axisVisibilityButton?.addEventListener("pointerdown", (event) => {
 
 axisVisibilityButton?.addEventListener("click", (event) => {
   event.stopPropagation();
+  closeTextEditor();
   if (axisVisibilityPopover?.hidden === false) {
     closeAxisVisibilityPopover();
     return;
@@ -3995,6 +4211,32 @@ resetAxisVisibilityButton?.addEventListener("click", () => {
 
 axisVisibilityPopover?.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
+});
+
+textEditorPopover?.addEventListener("pointerdown", (event) => {
+  event.stopPropagation();
+});
+
+confirmTextLabelButton?.addEventListener("click", () => {
+  commitTextEditor();
+});
+
+cancelTextLabelButton?.addEventListener("click", () => {
+  closeTextEditor();
+  draw();
+});
+
+textEditorInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    commitTextEditor();
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeTextEditor();
+    draw();
+  }
 });
 
 tutorialPopover?.addEventListener("mouseenter", () => {
@@ -4053,6 +4295,12 @@ document.addEventListener("pointerdown", (event) => {
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (state.textEditor.open) {
+      closeTextEditor();
+      draw();
+      return;
+    }
+
     if (axisVisibilityPopover && !axisVisibilityPopover.hidden) {
       closeAxisVisibilityPopover();
       return;
