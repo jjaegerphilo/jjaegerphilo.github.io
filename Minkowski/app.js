@@ -26,6 +26,16 @@ const bellProbeRocketInput = document.getElementById("bellProbeRocket");
 const bellProbeTimeInput = document.getElementById("bellProbeTime");
 const bellProbeTimeValueInput = document.getElementById("bellProbeTimeValue");
 const bellFollowProbeFrameInput = document.getElementById("bellFollowProbeFrame");
+const bellPinProbeXInput = document.getElementById("bellPinProbeX");
+const bellShowStringLengthInput = document.getElementById("bellShowStringLength");
+const showTwinScenarioInput = document.getElementById("showTwinScenario");
+const twinScenarioControls = document.getElementById("twinScenarioControls");
+const twinTravelSpeedInput = document.getElementById("twinTravelSpeed");
+const twinHalfTripProperTimeInput = document.getElementById("twinHalfTripProperTime");
+const twinProbeProperTimeInput = document.getElementById("twinProbeProperTime");
+const twinProbeProperTimeValueInput = document.getElementById("twinProbeProperTimeValue");
+const twinFollowProbeFrameInput = document.getElementById("twinFollowProbeFrame");
+const twinSmoothTurnaroundInput = document.getElementById("twinSmoothTurnaround");
 const showAxisCoordinatesInput = document.getElementById("showAxisCoordinates");
 const showReferenceAxisCoordinatesInput = document.getElementById("showReferenceAxisCoordinates");
 const showBoostedPointGuidesInput = document.getElementById("showBoostedPointGuides");
@@ -81,10 +91,20 @@ const state = {
   bell: {
     enabled: false,
     separation: 4,
-    acceleration: 0.22,
+    acceleration: 0.05,
     probeRocket: "front",
     probeTime: 6,
-    followProbeFrame: false
+    followProbeFrame: false,
+    pinProbeX: false,
+    showStringLength: false
+  },
+  twin: {
+    enabled: false,
+    speed: 0.6,
+    halfTripProperTime: 4,
+    probeProperTime: 2,
+    followProbeFrame: false,
+    smoothTurnaround: false
   },
   showAxisCoordinates: true,
   showReferenceAxisCoordinates: true,
@@ -119,6 +139,7 @@ const view = {
 let copyDiagramStatusTimeoutId = null;
 let renderViewportOverride = null;
 let axisVisibilityTargets = [];
+let twinCurveCache = null;
 
 const DEFAULT_HYPERBOLA_SPACING = 2;
 const MAX_HYPERBOLA_LEVEL = 21;
@@ -130,6 +151,15 @@ const MIN_BELL_ACCELERATION = 0.05;
 const MAX_BELL_ACCELERATION = 0.8;
 const MAX_BELL_PROBE_TIME = 10;
 const BELL_DRAG_THRESHOLD_PX = 11;
+const MIN_TWIN_SPEED = 0.2;
+const MAX_TWIN_SPEED = 0.95;
+const MIN_TWIN_HALF_TRIP_PROPER_TIME = 1;
+const MAX_TWIN_HALF_TRIP_PROPER_TIME = 12;
+const TWIN_SAMPLE_DENSITY = 96;
+const TWIN_MIN_SAMPLE_COUNT = 320;
+const TWIN_DRAG_THRESHOLD_PX = 11;
+const TWIN_TURN_SMOOTH_HALF_WIDTH = 0.6;
+const TWIN_TURN_SMOOTH_FRACTION = 0.18;
 const DEFAULT_COPY_VIEWPORT = {
   xMin: -13,
   xMax: 13,
@@ -192,7 +222,7 @@ function sanitizeBellSeparation(value) {
 
 function sanitizeBellAcceleration(value) {
   if (!Number.isFinite(value)) {
-    return 0.22;
+    return 0.05;
   }
 
   return Math.max(MIN_BELL_ACCELERATION, Math.min(MAX_BELL_ACCELERATION, value));
@@ -331,6 +361,284 @@ function getBellScenarioGeometry() {
   };
 }
 
+function sanitizeTwinSpeed(value) {
+  if (!Number.isFinite(value)) {
+    return 0.6;
+  }
+
+  return Math.max(MIN_TWIN_SPEED, Math.min(MAX_TWIN_SPEED, value));
+}
+
+function sanitizeTwinHalfTripProperTime(value) {
+  if (!Number.isFinite(value)) {
+    return 4;
+  }
+
+  return Math.max(MIN_TWIN_HALF_TRIP_PROPER_TIME, Math.min(MAX_TWIN_HALF_TRIP_PROPER_TIME, value));
+}
+
+function getTwinTotalProperTime(halfTripProperTime = state.twin.halfTripProperTime) {
+  return sanitizeTwinHalfTripProperTime(halfTripProperTime) * 2;
+}
+
+function sanitizeTwinProbeProperTime(value, halfTripProperTime = state.twin.halfTripProperTime) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(getTwinTotalProperTime(halfTripProperTime), value));
+}
+
+function getTwinTurnHalfWidth(parameters) {
+  if (!parameters.smoothTurnaround) {
+    return 0;
+  }
+
+  return Math.min(
+    TWIN_TURN_SMOOTH_HALF_WIDTH,
+    parameters.halfTripProperTime * TWIN_TURN_SMOOTH_FRACTION,
+    parameters.halfTripProperTime * 0.45
+  );
+}
+
+function twinPhaseAtProperTime(properTime, parameters) {
+  const halfWidth = getTwinTurnHalfWidth(parameters);
+  const turnStart = parameters.halfTripProperTime - halfWidth;
+  const turnEnd = parameters.halfTripProperTime + halfWidth;
+  if (properTime < turnStart) {
+    return "outbound";
+  }
+  if (properTime > turnEnd) {
+    return "inbound";
+  }
+  return halfWidth > 1e-6 ? "turnaround" : "turnaround";
+}
+
+function twinFrameDefinedAtProperTime(properTime, parameters) {
+  return parameters.smoothTurnaround || Math.abs(properTime - parameters.halfTripProperTime) > 1e-4;
+}
+
+function getTwinSharpKinematics(parameters) {
+  const rapidityValue = rapidity(parameters.speed);
+  return {
+    rapidity: rapidityValue,
+    dx: Math.sinh(rapidityValue),
+    dt: Math.cosh(rapidityValue)
+  };
+}
+
+function sharpTwinPointAtProperTime(properTime, parameters) {
+  const tau = sanitizeTwinProbeProperTime(properTime, parameters.halfTripProperTime);
+  const { dx, dt } = getTwinSharpKinematics(parameters);
+  if (tau <= parameters.halfTripProperTime) {
+    return {
+      x: dx * tau,
+      t: dt * tau
+    };
+  }
+
+  return {
+    x: dx * (2 * parameters.halfTripProperTime - tau),
+    t: dt * tau
+  };
+}
+
+function sharpTwinTangentAtProperTime(properTime, parameters) {
+  const { dx, dt } = getTwinSharpKinematics(parameters);
+  return {
+    x: properTime <= parameters.halfTripProperTime ? dx : -dx,
+    t: dt
+  };
+}
+
+function hermiteBasis(u) {
+  return {
+    h00: 2 * u * u * u - 3 * u * u + 1,
+    h10: u * u * u - 2 * u * u + u,
+    h01: -2 * u * u * u + 3 * u * u,
+    h11: u * u * u - u * u
+  };
+}
+
+function hermiteDerivativeBasis(u) {
+  return {
+    h00: 6 * u * u - 6 * u,
+    h10: 3 * u * u - 4 * u + 1,
+    h01: -6 * u * u + 6 * u,
+    h11: 3 * u * u - 2 * u
+  };
+}
+
+function smoothTwinConnectorAtProperTime(properTime, parameters) {
+  const halfWidth = getTwinTurnHalfWidth(parameters);
+  if (halfWidth < 1e-6) {
+    const point = sharpTwinPointAtProperTime(properTime, parameters);
+    const tangent = sharpTwinTangentAtProperTime(properTime, parameters);
+    return { point, tangent };
+  }
+
+  const turnStart = parameters.halfTripProperTime - halfWidth;
+  const turnEnd = parameters.halfTripProperTime + halfWidth;
+  const duration = turnEnd - turnStart;
+  const u = Math.max(0, Math.min(1, (properTime - turnStart) / duration));
+  const startPoint = sharpTwinPointAtProperTime(turnStart, parameters);
+  const endPoint = sharpTwinPointAtProperTime(turnEnd, parameters);
+  const startTangent = sharpTwinTangentAtProperTime(turnStart, parameters);
+  const endTangent = sharpTwinTangentAtProperTime(turnEnd, parameters);
+  const basis = hermiteBasis(u);
+  const derivativeBasis = hermiteDerivativeBasis(u);
+
+  const point = {
+    x:
+      basis.h00 * startPoint.x +
+      basis.h10 * duration * startTangent.x +
+      basis.h01 * endPoint.x +
+      basis.h11 * duration * endTangent.x,
+    t:
+      basis.h00 * startPoint.t +
+      basis.h10 * duration * startTangent.t +
+      basis.h01 * endPoint.t +
+      basis.h11 * duration * endTangent.t
+  };
+  const tangent = {
+    x:
+      (derivativeBasis.h00 * startPoint.x +
+        derivativeBasis.h10 * duration * startTangent.x +
+        derivativeBasis.h01 * endPoint.x +
+        derivativeBasis.h11 * duration * endTangent.x) / duration,
+    t:
+      (derivativeBasis.h00 * startPoint.t +
+        derivativeBasis.h10 * duration * startTangent.t +
+        derivativeBasis.h01 * endPoint.t +
+        derivativeBasis.h11 * duration * endTangent.t) / duration
+  };
+
+  return { point, tangent };
+}
+
+function twinCurveStateAtProperTime(properTime, parameters) {
+  const tau = sanitizeTwinProbeProperTime(properTime, parameters.halfTripProperTime);
+  const halfWidth = getTwinTurnHalfWidth(parameters);
+  const turnStart = parameters.halfTripProperTime - halfWidth;
+  const turnEnd = parameters.halfTripProperTime + halfWidth;
+
+  let point;
+  let tangent;
+  if (halfWidth > 1e-6 && tau > turnStart && tau < turnEnd) {
+    ({ point, tangent } = smoothTwinConnectorAtProperTime(tau, parameters));
+  } else {
+    point = sharpTwinPointAtProperTime(tau, parameters);
+    tangent = sharpTwinTangentAtProperTime(tau, parameters);
+  }
+
+  const velocity = Math.abs(tangent.t) < 1e-9 ? 0 : clampBetaToControlRange(tangent.x / tangent.t);
+  return {
+    properTime: tau,
+    point,
+    tangent,
+    rapidity: rapidity(velocity),
+    velocity,
+    phase: twinPhaseAtProperTime(tau, parameters),
+    frameDefined: twinFrameDefinedAtProperTime(tau, parameters)
+  };
+}
+
+function getTwinCurveParameters() {
+  return {
+    speed: sanitizeTwinSpeed(state.twin.speed),
+    halfTripProperTime: sanitizeTwinHalfTripProperTime(state.twin.halfTripProperTime),
+    smoothTurnaround: state.twin.smoothTurnaround
+  };
+}
+
+function buildTwinCurveData(parameters) {
+  const totalProperTime = getTwinTotalProperTime(parameters.halfTripProperTime);
+  const sampleCount = Math.max(TWIN_MIN_SAMPLE_COUNT, Math.ceil(totalProperTime * TWIN_SAMPLE_DENSITY));
+  const step = totalProperTime / sampleCount;
+  const samples = [];
+  for (let i = 0; i <= sampleCount; i += 1) {
+    const tau = i * step;
+    const sample = twinCurveStateAtProperTime(tau, parameters);
+    samples.push({
+      tau,
+      x: sample.point.x,
+      t: sample.point.t
+    });
+  }
+
+  return {
+    key: JSON.stringify(parameters),
+    parameters,
+    totalProperTime,
+    sampleCount,
+    step,
+    turnHalfWidth: getTwinTurnHalfWidth(parameters),
+    samples
+  };
+}
+
+function getTwinCurveData() {
+  const parameters = getTwinCurveParameters();
+  const key = JSON.stringify(parameters);
+  if (twinCurveCache && twinCurveCache.key === key) {
+    return twinCurveCache;
+  }
+
+  twinCurveCache = buildTwinCurveData(parameters);
+  return twinCurveCache;
+}
+
+function sampleTwinCurveAtProperTime(properTime, curveData = getTwinCurveData()) {
+  return twinCurveStateAtProperTime(properTime, curveData.parameters);
+}
+
+function getTwinScenarioGeometry() {
+  if (!state.twin.enabled) {
+    return null;
+  }
+
+  const curve = getTwinCurveData();
+  const probe = sampleTwinCurveAtProperTime(state.twin.probeProperTime, curve);
+  const departure = sampleTwinCurveAtProperTime(0, curve);
+  const turnaround = sampleTwinCurveAtProperTime(curve.parameters.halfTripProperTime, curve);
+  const reunion = sampleTwinCurveAtProperTime(curve.totalProperTime, curve);
+  const homeSimultaneousAge = probe.frameDefined
+    ? probe.point.t - probe.velocity * probe.point.x
+    : null;
+  const homeSimultaneousPoint = homeSimultaneousAge == null
+    ? null
+    : { x: 0, t: homeSimultaneousAge };
+
+  return {
+    curve,
+    probe,
+    departure,
+    turnaround,
+    reunion,
+    homeSimultaneousAge,
+    homeSimultaneousPoint,
+    localGap: homeSimultaneousPoint ? intervalMetrics(probe.point, homeSimultaneousPoint) : null,
+    reunionAgeGap: reunion.point.t - curve.totalProperTime
+  };
+}
+
+function findNearestTwinProbeProperTime(screenPoint) {
+  const curve = getTwinCurveData();
+  let bestProperTime = curve.samples[0]?.tau ?? 0;
+  let bestDistanceSquared = Infinity;
+
+  for (const sample of curve.samples) {
+    const samplePoint = worldToScreen({ x: sample.x, t: sample.t });
+    const distanceSquared = pointDistanceSquared(screenPoint, samplePoint);
+    if (distanceSquared < bestDistanceSquared) {
+      bestDistanceSquared = distanceSquared;
+      bestProperTime = sample.tau;
+    }
+  }
+
+  return sanitizeTwinProbeProperTime(bestProperTime, curve.parameters.halfTripProperTime);
+}
+
 function findNearestBellProbeTime(screenPoint, rocket) {
   let bestTime = sanitizeBellProbeTime(screenToWorld(screenPoint).t);
   let bestDistanceSquared = Infinity;
@@ -371,6 +679,82 @@ function applyBellProbeFrameLock() {
   return true;
 }
 
+function applyTwinProbeFrameLock() {
+  if (!state.twin.enabled || !state.twin.followProbeFrame) {
+    return false;
+  }
+
+  const geometry = getTwinScenarioGeometry();
+  if (!geometry || !geometry.probe.frameDefined) {
+    return false;
+  }
+
+  const lockedBeta = clampBetaToControlRange(geometry.probe.velocity);
+  if (Math.abs(lockedBeta - state.beta) < 1e-9) {
+    return false;
+  }
+
+  state.beta = lockedBeta;
+  return true;
+}
+
+function applyScenarioProbeFrameLock() {
+  if (state.twin.enabled && state.twin.followProbeFrame) {
+    return applyTwinProbeFrameLock();
+  }
+  return applyBellProbeFrameLock();
+}
+
+function velocityControlsLockedByScenario() {
+  return (
+    (state.bell.enabled && state.bell.followProbeFrame) ||
+    (state.twin.enabled && state.twin.followProbeFrame)
+  );
+}
+
+function getBellBoostedFrameXShift() {
+  if (
+    !state.bell.enabled ||
+    !state.bell.followProbeFrame ||
+    !state.bell.pinProbeX
+  ) {
+    return 0;
+  }
+
+  const probe = getBellProbeState();
+  return bellRocketOffset(probe.rocket) - lorentz(probe.point, state.beta).x;
+}
+
+function worldToBoostedFrame(point) {
+  const boostedPoint = lorentz(point, state.beta);
+  return {
+    x: boostedPoint.x + getBellBoostedFrameXShift(),
+    t: boostedPoint.t
+  };
+}
+
+function boostedFrameToWorld(point) {
+  return lorentz({
+    x: point.x - getBellBoostedFrameXShift(),
+    t: point.t
+  }, renderBeta());
+}
+
+function getBellDisplayXTranslation(amount, transform) {
+  if (
+    !state.bell.enabled ||
+    !state.bell.followProbeFrame ||
+    !state.bell.pinProbeX
+  ) {
+    return 0;
+  }
+
+  const probe = getBellProbeState();
+  const transformedProbeX = transform.a * probe.point.x + transform.b * probe.point.t;
+  const launchX = bellRocketOffset(probe.rocket);
+  return launchX - transformedProbeX;
+}
+
 function renderBeta() {
   return -state.beta;
 }
@@ -398,20 +782,30 @@ function lorentz(point, beta) {
 function getDisplayTransformMatrixForAmount(amount) {
   const displayBeta = displayBetaForAmount(amount);
   if (Math.abs(displayBeta) < 1e-9) {
-    return {
+    const identityTransform = {
       a: 1,
       b: 0,
       determinant: 1
+    };
+    return {
+      ...identityTransform,
+      offsetX: getBellDisplayXTranslation(amount, identityTransform),
+      offsetT: 0
     };
   }
 
   const g = gamma(displayBeta);
   const a = g;
   const b = -g * displayBeta;
-  return {
+  const linearTransform = {
     a,
     b,
     determinant: a * a - b * b
+  };
+  return {
+    ...linearTransform,
+    offsetX: getBellDisplayXTranslation(amount, linearTransform),
+    offsetT: 0
   };
 }
 
@@ -420,22 +814,27 @@ function getDisplayTransformMatrix() {
 }
 
 function applyDisplayTransform(point) {
-  const { a, b } = getDisplayTransformMatrix();
+  const { a, b, offsetX = 0, offsetT = 0 } = getDisplayTransformMatrix();
   return {
-    x: a * point.x + b * point.t,
-    t: b * point.x + a * point.t
+    x: a * point.x + b * point.t + offsetX,
+    t: b * point.x + a * point.t + offsetT
   };
 }
 
 function invertDisplayTransformWithMatrix(point, matrix) {
-  const { a, b, determinant } = matrix;
+  const { a, b, determinant, offsetX = 0, offsetT = 0 } = matrix;
   if (Math.abs(determinant) < 1e-9) {
     return point;
   }
 
+  const translatedPoint = {
+    x: point.x - offsetX,
+    t: point.t - offsetT
+  };
+
   return {
-    x: (a * point.x - b * point.t) / determinant,
-    t: (-b * point.x + a * point.t) / determinant
+    x: (a * translatedPoint.x - b * translatedPoint.t) / determinant,
+    t: (-b * translatedPoint.x + a * translatedPoint.t) / determinant
   };
 }
 
@@ -575,7 +974,7 @@ function getBoostedFrameBounds() {
     { x: view.width, y: 0 },
     { x: 0, y: view.height },
     { x: view.width, y: view.height }
-  ].map((corner) => lorentz(screenToWorld(corner), state.beta));
+  ].map((corner) => worldToBoostedFrame(screenToWorld(corner)));
 
   let maxX = 0;
   let maxT = 0;
@@ -859,12 +1258,12 @@ function snapPointToReferenceGrid(point, thresholdPx = 10) {
 }
 
 function snapPointToBoostedGrid(point, thresholdPx = 10) {
-  const boostedPoint = lorentz(point, state.beta);
+  const boostedPoint = worldToBoostedFrame(point);
   const snappedBoostedPoint = {
     x: Math.round(boostedPoint.x),
     t: Math.round(boostedPoint.t)
   };
-  const snappedPoint = lorentz(snappedBoostedPoint, renderBeta());
+  const snappedPoint = boostedFrameToWorld(snappedBoostedPoint);
   const screenPoint = worldToScreen(point);
   const snappedScreenPoint = worldToScreen(snappedPoint);
   if (pointDistanceSquared(screenPoint, snappedScreenPoint) > thresholdPx * thresholdPx) {
@@ -1337,14 +1736,13 @@ function drawBoostedGrid() {
   const tExtent = Math.max(maxT * 1.35, 2);
   const xGridLimit = Math.ceil(xExtent);
   const tGridLimit = Math.ceil(tExtent);
-  const betaToWorld = renderBeta();
 
   ctx.save();
 
   if (shouldDrawGridFamily("boostedX")) {
     for (let t = -tGridLimit; t <= tGridLimit; t += 1) {
-      const start = worldToScreen(lorentz({ x: -xExtent, t }, betaToWorld));
-      const end = worldToScreen(lorentz({ x: xExtent, t }, betaToWorld));
+      const start = worldToScreen(boostedFrameToWorld({ x: -xExtent, t }));
+      const end = worldToScreen(boostedFrameToWorld({ x: xExtent, t }));
       const isMajor = t % 5 === 0;
       ctx.strokeStyle = isMajor ? "rgba(21, 71, 96, 0.18)" : "rgba(21, 71, 96, 0.10)";
       ctx.lineWidth = isMajor ? 1 : 0.8;
@@ -1357,8 +1755,8 @@ function drawBoostedGrid() {
 
   if (shouldDrawGridFamily("boostedT")) {
     for (let x = -xGridLimit; x <= xGridLimit; x += 1) {
-      const start = worldToScreen(lorentz({ x, t: -tExtent }, betaToWorld));
-      const end = worldToScreen(lorentz({ x, t: tExtent }, betaToWorld));
+      const start = worldToScreen(boostedFrameToWorld({ x, t: -tExtent }));
+      const end = worldToScreen(boostedFrameToWorld({ x, t: tExtent }));
       const isMajor = x % 5 === 0;
       ctx.strokeStyle = isMajor ? "rgba(102, 65, 28, 0.18)" : "rgba(102, 65, 28, 0.10)";
       ctx.lineWidth = isMajor ? 1 : 0.8;
@@ -1483,7 +1881,6 @@ function drawClampedAxisLabel(text, lineStart, lineEnd, options = {}) {
 function drawAxes() {
   const { maxX, maxT } = getWorldBounds();
   const extent = Math.max(maxX, maxT) * 1.6;
-  const beta = renderBeta();
   const referenceXAxis = [
     { x: -extent, t: 0 },
     { x: extent, t: 0 }
@@ -1500,8 +1897,8 @@ function drawAxes() {
     { x: 0, t: -extent },
     { x: 0, t: extent }
   ];
-  const transformedXAxis = baseXAxis.map((p) => lorentz(p, beta));
-  const transformedTAxis = baseTAxis.map((p) => lorentz(p, beta));
+  const transformedXAxis = baseXAxis.map((p) => boostedFrameToWorld(p));
+  const transformedTAxis = baseTAxis.map((p) => boostedFrameToWorld(p));
 
   const refXStart = worldToScreen(referenceXAxis[0]);
   const refXEnd = worldToScreen(referenceXAxis[1]);
@@ -1511,8 +1908,9 @@ function drawAxes() {
   const xEnd = worldToScreen(transformedXAxis[1]);
   const tStart = worldToScreen(transformedTAxis[0]);
   const tEnd = worldToScreen(transformedTAxis[1]);
-  const origin = worldToScreen(lorentz({ x: 0, t: 0 }, beta));
-  const showBoostedAxes = Math.abs(beta) > 1e-6;
+  const referenceOrigin = worldToScreen({ x: 0, t: 0 });
+  const boostedOrigin = worldToScreen(boostedFrameToWorld({ x: 0, t: 0 }));
+  const showBoostedAxes = Math.abs(state.beta) > 1e-6;
   const anyAxisLineVisible = (
     axisLineVisible("referenceX") ||
     axisLineVisible("referenceT") ||
@@ -1543,9 +1941,16 @@ function drawAxes() {
 
   if (anyAxisLineVisible) {
     ctx.fillStyle = "#1f2f3a";
-    ctx.beginPath();
-    ctx.arc(origin.x, origin.y, 2.8, 0, Math.PI * 2);
-    ctx.fill();
+    if (axisLineVisible("referenceX") || axisLineVisible("referenceT")) {
+      ctx.beginPath();
+      ctx.arc(referenceOrigin.x, referenceOrigin.y, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (showBoostedAxes && (axisLineVisible("boostedX") || axisLineVisible("boostedT"))) {
+      ctx.beginPath();
+      ctx.arc(boostedOrigin.x, boostedOrigin.y, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   if (showBoostedAxes && axisLabelVisible("boostedX")) {
@@ -1673,32 +2078,30 @@ function drawAxisCoordinateValuesForAxis(getScreenPointForValue, color) {
 }
 
 function drawAxisCoordinateValues() {
-  const beta = renderBeta();
   if (axisLineVisible("boostedX") && axisLabelVisible("boostedX")) {
     drawAxisCoordinateValuesForAxis(
-      (value) => worldToScreen(lorentz({ x: value, t: 0 }, beta)),
+      (value) => worldToScreen(boostedFrameToWorld({ x: value, t: 0 })),
       "rgba(21, 71, 96, 0.88)"
     );
   }
   if (axisLineVisible("boostedT") && axisLabelVisible("boostedT")) {
     drawAxisCoordinateValuesForAxis(
-      (value) => worldToScreen(lorentz({ x: 0, t: value }, beta)),
+      (value) => worldToScreen(boostedFrameToWorld({ x: 0, t: value })),
       "rgba(102, 65, 28, 0.88)"
     );
   }
 }
 
 function canShowReferenceAxisCoordinateValues() {
-  const beta = renderBeta();
-  if (Math.abs(beta) < 1e-6) {
+  if (Math.abs(state.beta) < 1e-6) {
     return false;
   }
 
   const sampleValue = 4;
   const referenceXPoint = worldToScreen({ x: sampleValue, t: 0 });
-  const boostedXPoint = worldToScreen(lorentz({ x: sampleValue, t: 0 }, beta));
+  const boostedXPoint = worldToScreen(boostedFrameToWorld({ x: sampleValue, t: 0 }));
   const referenceTPoint = worldToScreen({ x: 0, t: sampleValue });
-  const boostedTPoint = worldToScreen(lorentz({ x: 0, t: sampleValue }, beta));
+  const boostedTPoint = worldToScreen(boostedFrameToWorld({ x: 0, t: sampleValue }));
   const minSeparation = Math.min(
     Math.sqrt(pointDistanceSquared(referenceXPoint, boostedXPoint)),
     Math.sqrt(pointDistanceSquared(referenceTPoint, boostedTPoint))
@@ -1975,7 +2378,7 @@ function drawBellFrameAxis(point, direction, color, label) {
   ctx.restore();
 }
 
-function drawBellSegmentLabel(startPoint, endPoint, text, color) {
+function drawBellSegmentLabel(startPoint, endPoint, text, color, verticalOffset = -20) {
   const start = worldToScreen(startPoint);
   const end = worldToScreen(endPoint);
   const midpoint = {
@@ -1990,7 +2393,7 @@ function drawBellSegmentLabel(startPoint, endPoint, text, color) {
   const boxWidth = textWidth + paddingX * 2;
   const boxHeight = 16;
   const boxX = midpoint.x - boxWidth * 0.5;
-  const boxY = midpoint.y - 20;
+  const boxY = midpoint.y + verticalOffset;
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
   ctx.strokeStyle = "rgba(40, 55, 66, 0.22)";
@@ -2021,6 +2424,9 @@ function drawBellScenarioOverlay(geometry) {
 
   if (state.bell.followProbeFrame) {
     lines.push("boosted frame locked to probe velocity");
+  }
+  if (state.bell.followProbeFrame && state.bell.pinProbeX) {
+    lines.push("probe rocket pinned to launch x");
   }
 
   ctx.save();
@@ -2147,8 +2553,243 @@ function drawBellScenario() {
 
   drawBellSegmentLabel(geometry.probe.point, geometry.labSimultaneous.point, "launch frame", "rgba(78, 91, 101, 0.84)");
   drawBellSegmentLabel(geometry.probe.point, geometry.simultaneous.point, "probe frame", "rgba(194, 102, 28, 0.95)");
+  if (state.bell.showStringLength) {
+    drawBellSegmentLabel(
+      geometry.probe.point,
+      geometry.simultaneous.point,
+      `string length (acc. to front ship) = ${geometry.localGap.absS.toFixed(3)}`,
+      "rgba(194, 102, 28, 0.95)",
+      4
+    );
+  }
 
   drawBellScenarioOverlay(geometry);
+}
+
+function drawTwinScenarioOverlay(geometry) {
+  const lines = [
+    `Traveler tau = ${formatCoordinateValue(geometry.probe.properTime)}, lab t = ${formatCoordinateValue(geometry.probe.point.t)}`,
+    `traveler phase = ${geometry.probe.phase}`
+  ];
+
+  if (geometry.probe.frameDefined) {
+    lines.splice(1, 0, `instantaneous v = ${formatVelocityPercent(geometry.probe.velocity)} of c`);
+  } else {
+    lines.splice(
+      1,
+      0,
+      `instantaneous frame jumps from +${formatVelocityPercent(geometry.curve.parameters.speed)} to -${formatVelocityPercent(geometry.curve.parameters.speed)}`
+    );
+  }
+
+  if (geometry.homeSimultaneousAge != null) {
+    lines.push(`home age simultaneous for traveler = ${formatCoordinateValue(geometry.homeSimultaneousAge)}`);
+    lines.push(`age gap at this slice = ${(geometry.homeSimultaneousAge - geometry.probe.properTime).toFixed(3)}`);
+  } else {
+    lines.push("sharp turnaround: no unique instantaneous rest frame at the exact reversal");
+  }
+
+  lines.push(
+    `reunion ages: home = ${formatCoordinateValue(geometry.reunion.point.t)}, traveler = ${formatCoordinateValue(geometry.curve.totalProperTime)}`
+  );
+
+  if (state.twin.followProbeFrame) {
+    lines.push("boosted frame locked to traveler velocity");
+  }
+  if (state.twin.smoothTurnaround) {
+    lines.push("turnaround smoothed for continuous frame changes");
+  }
+
+  ctx.save();
+  ctx.font = "12px IBM Plex Sans, Segoe UI, sans-serif";
+  const paddingX = 8;
+  const lineHeight = 15;
+  const boxWidth = Math.max(...lines.map((line) => ctx.measureText(line).width)) + paddingX * 2;
+  const boxHeight = lines.length * lineHeight + 10;
+  const boxX = 12;
+  const boxY = 12;
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.strokeStyle = "rgba(40, 55, 66, 0.3)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.rect(boxX, boxY, boxWidth, boxHeight);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(17, 32, 43, 0.96)";
+  for (let i = 0; i < lines.length; i += 1) {
+    ctx.fillText(lines[i], boxX + paddingX, boxY + 15 + i * lineHeight);
+  }
+  ctx.restore();
+}
+
+function drawTwinScenario() {
+  const geometry = getTwinScenarioGeometry();
+  if (!geometry) {
+    return;
+  }
+
+  const worldBounds = getWorldBounds();
+  const visibleTop = Math.max(worldBounds.maxT * 1.05, geometry.reunion.point.t + 0.5, 1.5);
+  const rocketColors = {
+    home: "#33404b",
+    outbound: "#1765a3",
+    turnaround: "#8d5c99",
+    inbound: "#bb6b18"
+  };
+  const homeSamples = [
+    { x: 0, t: 0 },
+    { x: 0, t: visibleTop }
+  ];
+
+  drawBellWorldlineSegment(homeSamples, rocketColors.home, 2.4);
+
+  const outboundSamples = [];
+  const turnaroundSamples = [];
+  const inboundSamples = [];
+  const turnStart = geometry.curve.parameters.halfTripProperTime - geometry.curve.turnHalfWidth;
+  const turnEnd = geometry.curve.parameters.halfTripProperTime + geometry.curve.turnHalfWidth;
+
+  for (const sample of geometry.curve.samples) {
+    const worldPoint = { x: sample.x, t: sample.t };
+    if (sample.tau <= turnStart + 1e-6) {
+      outboundSamples.push(worldPoint);
+      continue;
+    }
+    if (sample.tau >= turnEnd - 1e-6) {
+      inboundSamples.push(worldPoint);
+      continue;
+    }
+    turnaroundSamples.push(worldPoint);
+  }
+
+  if (geometry.curve.turnHalfWidth > 1e-6 && turnaroundSamples.length > 1) {
+    if (
+      Math.abs(turnaroundSamples[0].x - outboundSamples[outboundSamples.length - 1].x) > 1e-6 ||
+      Math.abs(turnaroundSamples[0].t - outboundSamples[outboundSamples.length - 1].t) > 1e-6
+    ) {
+      turnaroundSamples.unshift(outboundSamples[outboundSamples.length - 1]);
+    }
+    if (
+      Math.abs(turnaroundSamples[turnaroundSamples.length - 1].x - inboundSamples[0].x) > 1e-6 ||
+      Math.abs(turnaroundSamples[turnaroundSamples.length - 1].t - inboundSamples[0].t) > 1e-6
+    ) {
+      turnaroundSamples.push(inboundSamples[0]);
+    }
+  } else {
+    if (
+      !outboundSamples.length ||
+      Math.abs(outboundSamples[outboundSamples.length - 1].x - geometry.turnaround.point.x) > 1e-6 ||
+      Math.abs(outboundSamples[outboundSamples.length - 1].t - geometry.turnaround.point.t) > 1e-6
+    ) {
+      outboundSamples.push(geometry.turnaround.point);
+    }
+    if (
+      !inboundSamples.length ||
+      Math.abs(inboundSamples[0].x - geometry.turnaround.point.x) > 1e-6 ||
+      Math.abs(inboundSamples[0].t - geometry.turnaround.point.t) > 1e-6
+    ) {
+      inboundSamples.unshift(geometry.turnaround.point);
+    }
+  }
+
+  drawBellWorldlineSegment(outboundSamples, rocketColors.outbound, 2.6);
+  if (geometry.curve.turnHalfWidth > 1e-6 && turnaroundSamples.length > 1) {
+    drawBellWorldlineSegment(turnaroundSamples, rocketColors.turnaround, 3);
+  }
+  drawBellWorldlineSegment(inboundSamples, rocketColors.inbound, 2.6);
+
+  ctx.save();
+  ctx.font = "12px IBM Plex Sans, Segoe UI, sans-serif";
+  const homeLabelPoint = worldToScreen({ x: 0, t: Math.min(visibleTop, Math.max(1.8, geometry.reunion.point.t * 0.78)) });
+  ctx.fillStyle = rocketColors.home;
+  ctx.fillText("Home", homeLabelPoint.x + 7, homeLabelPoint.y - 7);
+  const travelerLabelSample = sampleTwinCurveAtProperTime(
+    Math.min(geometry.curve.totalProperTime * 0.28, geometry.curve.parameters.halfTripProperTime * 0.82),
+    geometry.curve
+  );
+  const travelerLabelPoint = worldToScreen(travelerLabelSample.point);
+  ctx.fillStyle = rocketColors.outbound;
+  ctx.fillText("Traveler", travelerLabelPoint.x + 7, travelerLabelPoint.y - 7);
+  ctx.restore();
+
+  drawBellEventMarker(geometry.departure.point, {
+    radius: 3.9,
+    fill: "#ffffff",
+    stroke: "rgba(51, 64, 75, 0.9)",
+    lineWidth: 1.5
+  });
+  drawBellEventMarker(geometry.reunion.point, {
+    radius: 4.3,
+    fill: "#ffffff",
+    stroke: "rgba(51, 64, 75, 0.9)",
+    lineWidth: 1.7
+  });
+  drawBellEventMarker(geometry.turnaround.point, {
+    radius: 3.6,
+    fill: "rgba(255, 255, 255, 0.94)",
+    stroke: rocketColors.turnaround,
+    lineWidth: 1.4
+  });
+
+  if (geometry.homeSimultaneousPoint) {
+    const localXAxisDirection = {
+      x: Math.cosh(geometry.probe.rapidity),
+      t: Math.sinh(geometry.probe.rapidity)
+    };
+    const localTAxisDirection = {
+      x: Math.sinh(geometry.probe.rapidity),
+      t: Math.cosh(geometry.probe.rapidity)
+    };
+    drawBellFrameAxis(geometry.probe.point, localXAxisDirection, "rgba(13, 122, 141, 0.62)", "x*");
+    drawBellFrameAxis(geometry.probe.point, localTAxisDirection, "rgba(154, 88, 16, 0.62)", "t*");
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(194, 102, 28, 0.95)";
+    ctx.lineWidth = 2.3;
+    ctx.beginPath();
+    const start = worldToScreen(geometry.probe.point);
+    const end = worldToScreen(geometry.homeSimultaneousPoint);
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+    ctx.restore();
+
+    drawBellEventMarker(geometry.homeSimultaneousPoint, {
+      radius: 4.2,
+      fill: "rgba(255, 249, 239, 0.96)",
+      stroke: "rgba(194, 102, 28, 0.95)",
+      lineWidth: 1.8
+    });
+    drawBellSegmentLabel(
+      geometry.probe.point,
+      geometry.homeSimultaneousPoint,
+      `traveler τ = ${formatCoordinateValue(geometry.probe.properTime)}`,
+      rocketColors.outbound,
+      -42
+    );
+    drawBellSegmentLabel(
+      geometry.probe.point,
+      geometry.homeSimultaneousPoint,
+      `traveler simultaneity: home age = ${formatCoordinateValue(geometry.homeSimultaneousAge)}`,
+      "rgba(194, 102, 28, 0.95)",
+      -20
+    );
+  }
+
+  drawBellEventMarker(geometry.probe.point, {
+    radius: 5.1,
+    fill: "#ffffff",
+    stroke: geometry.probe.phase === "inbound"
+      ? rocketColors.inbound
+      : geometry.probe.phase === "turnaround"
+        ? rocketColors.turnaround
+        : rocketColors.outbound,
+    lineWidth: 2.5
+  });
+
+  drawTwinScenarioOverlay(geometry);
 }
 
 function drawStrokes() {
@@ -2332,9 +2973,6 @@ function drawReferencePointGuides() {
 }
 
 function drawBoostedPointGuides() {
-  const boostedFrameBeta = state.beta;
-  const inverseBeta = renderBeta();
-
   ctx.save();
   ctx.lineWidth = 1.15;
   ctx.setLineDash([6, 4]);
@@ -2345,15 +2983,15 @@ function drawBoostedPointGuides() {
     }
 
     const point = stroke.points[0];
-    const boostedPoint = lorentz(point, boostedFrameBeta);
+    const boostedPoint = worldToBoostedFrame(point);
     drawPointGuideSegments([
       {
-        start: lorentz({ x: boostedPoint.x, t: 0 }, inverseBeta),
+        start: boostedFrameToWorld({ x: boostedPoint.x, t: 0 }),
         end: point,
         color: "rgba(21, 71, 96, 0.36)"
       },
       {
-        start: lorentz({ x: 0, t: boostedPoint.t }, inverseBeta),
+        start: boostedFrameToWorld({ x: 0, t: boostedPoint.t }),
         end: point,
         color: "rgba(102, 65, 28, 0.36)"
       }
@@ -2364,8 +3002,6 @@ function drawBoostedPointGuides() {
 }
 
 function drawPointCoordinateLabels() {
-  const boostedFrameBeta = state.beta;
-
   ctx.save();
   ctx.font = "12px IBM Plex Sans, Segoe UI, sans-serif";
 
@@ -2376,12 +3012,12 @@ function drawPointCoordinateLabels() {
 
     const point = stroke.points[0];
     const screenPoint = worldToScreen(point);
-    const boostedPoint = lorentz(point, boostedFrameBeta);
+    const boostedPoint = worldToBoostedFrame(point);
     const lines = [
       `(t, x) = (${formatCoordinateValue(point.t)}, ${formatCoordinateValue(point.x)})`
     ];
 
-    if (Math.abs(boostedFrameBeta) > 1e-6) {
+    if (Math.abs(state.beta) > 1e-6) {
       lines.push(`(t', x') = (${formatCoordinateValue(boostedPoint.t)}, ${formatCoordinateValue(boostedPoint.x)})`);
     }
 
@@ -2455,6 +3091,9 @@ function draw() {
   if (state.bell.enabled) {
     drawBellScenario();
   }
+  if (state.twin.enabled) {
+    drawTwinScenario();
+  }
   if (state.showHyperbolaPoints) {
     drawHyperbolaPoints();
   }
@@ -2502,6 +3141,23 @@ function startStroke(event) {
       hideAxisVisibilityTarget(axisTarget);
     }
     return;
+  }
+  if (state.twin.enabled) {
+    const twinGeometry = getTwinScenarioGeometry();
+    const probeScreenPoint = twinGeometry ? worldToScreen(twinGeometry.probe.point) : null;
+    if (
+      probeScreenPoint &&
+      pointDistanceSquared(screenPoint, probeScreenPoint) <= TWIN_DRAG_THRESHOLD_PX * TWIN_DRAG_THRESHOLD_PX
+    ) {
+      state.drawing = true;
+      state.drawMode = "twinProbe";
+      state.draggingShape = false;
+      state.currentPointerId = event.pointerId;
+      state.currentGroupId = null;
+      canvas.setPointerCapture(event.pointerId);
+      canvas.style.cursor = "grabbing";
+      return;
+    }
   }
   if (state.bell.enabled) {
     const bellGeometry = getBellScenarioGeometry();
@@ -2639,6 +3295,22 @@ function updateStroke(event) {
     return;
   }
 
+  if (state.drawMode === "twinProbe") {
+    state.twin.probeProperTime = findNearestTwinProbeProperTime(eventToScreenPoint(event));
+    if (twinProbeProperTimeInput) {
+      twinProbeProperTimeInput.value = String(state.twin.probeProperTime);
+    }
+    if (twinProbeProperTimeValueInput) {
+      twinProbeProperTimeValueInput.value = state.twin.probeProperTime.toFixed(2);
+    }
+    if (applyScenarioProbeFrameLock()) {
+      syncVelocityLabels();
+      betaInput.value = String(state.beta);
+    }
+    draw();
+    return;
+  }
+
   if (state.drawMode === "bellProbe") {
     state.bell.probeTime = findNearestBellProbeTime(eventToScreenPoint(event), state.bell.probeRocket);
     if (bellProbeTimeInput) {
@@ -2647,7 +3319,7 @@ function updateStroke(event) {
     if (bellProbeTimeValueInput) {
       bellProbeTimeValueInput.value = state.bell.probeTime.toFixed(2);
     }
-    if (applyBellProbeFrameLock()) {
+    if (applyScenarioProbeFrameLock()) {
       syncVelocityLabels();
       betaInput.value = String(state.beta);
     }
@@ -2698,6 +3370,17 @@ function endStroke(event) {
     state.currentPointerId = null;
     state.currentGroupId = null;
     canvas.releasePointerCapture(event.pointerId);
+    return;
+  }
+
+  if (state.drawMode === "twinProbe") {
+    state.drawing = false;
+    state.drawMode = null;
+    state.currentPointerId = null;
+    state.currentGroupId = null;
+    canvas.releasePointerCapture(event.pointerId);
+    syncToolControls();
+    draw();
     return;
   }
 
@@ -2764,6 +3447,13 @@ function syncRectifyControls() {
   syncRectifyLabels();
 }
 
+function syncVelocityLockControls() {
+  const lockVelocityControls = velocityControlsLockedByScenario();
+  betaInput.disabled = lockVelocityControls;
+  betaValue.disabled = lockVelocityControls;
+  gammaValue.disabled = lockVelocityControls;
+}
+
 function syncBellControls() {
   const controlsVisible = state.bell.enabled;
   if (showBellScenarioInput) {
@@ -2798,11 +3488,58 @@ function syncBellControls() {
     bellFollowProbeFrameInput.checked = state.bell.followProbeFrame;
     bellFollowProbeFrameInput.disabled = !controlsVisible;
   }
+  if (bellPinProbeXInput) {
+    bellPinProbeXInput.checked = state.bell.pinProbeX;
+    bellPinProbeXInput.disabled = !controlsVisible;
+  }
+  if (bellShowStringLengthInput) {
+    bellShowStringLengthInput.checked = state.bell.showStringLength;
+    bellShowStringLengthInput.disabled = !controlsVisible;
+  }
+  syncVelocityLockControls();
+}
 
-  const lockVelocityControls = controlsVisible && state.bell.followProbeFrame;
-  betaInput.disabled = lockVelocityControls;
-  betaValue.disabled = lockVelocityControls;
-  gammaValue.disabled = lockVelocityControls;
+function syncTwinControls() {
+  state.twin.speed = sanitizeTwinSpeed(state.twin.speed);
+  state.twin.halfTripProperTime = sanitizeTwinHalfTripProperTime(state.twin.halfTripProperTime);
+  const controlsVisible = state.twin.enabled;
+  const totalProperTime = getTwinTotalProperTime();
+  state.twin.probeProperTime = sanitizeTwinProbeProperTime(state.twin.probeProperTime);
+  if (showTwinScenarioInput) {
+    showTwinScenarioInput.checked = state.twin.enabled;
+  }
+  if (twinScenarioControls) {
+    twinScenarioControls.hidden = !controlsVisible;
+    twinScenarioControls.setAttribute("aria-hidden", controlsVisible ? "false" : "true");
+    twinScenarioControls.style.display = controlsVisible ? "grid" : "none";
+  }
+  if (twinTravelSpeedInput) {
+    twinTravelSpeedInput.value = state.twin.speed.toFixed(2);
+    twinTravelSpeedInput.disabled = !controlsVisible;
+  }
+  if (twinHalfTripProperTimeInput) {
+    twinHalfTripProperTimeInput.value = state.twin.halfTripProperTime.toFixed(1);
+    twinHalfTripProperTimeInput.disabled = !controlsVisible;
+  }
+  if (twinProbeProperTimeInput) {
+    twinProbeProperTimeInput.max = String(totalProperTime);
+    twinProbeProperTimeInput.value = String(state.twin.probeProperTime);
+    twinProbeProperTimeInput.disabled = !controlsVisible;
+  }
+  if (twinProbeProperTimeValueInput) {
+    twinProbeProperTimeValueInput.max = String(totalProperTime);
+    twinProbeProperTimeValueInput.value = state.twin.probeProperTime.toFixed(2);
+    twinProbeProperTimeValueInput.disabled = !controlsVisible;
+  }
+  if (twinFollowProbeFrameInput) {
+    twinFollowProbeFrameInput.checked = state.twin.followProbeFrame;
+    twinFollowProbeFrameInput.disabled = !controlsVisible;
+  }
+  if (twinSmoothTurnaroundInput) {
+    twinSmoothTurnaroundInput.checked = state.twin.smoothTurnaround;
+    twinSmoothTurnaroundInput.disabled = !controlsVisible;
+  }
+  syncVelocityLockControls();
 }
 
 function syncHyperbolaControls() {
@@ -2959,11 +3696,15 @@ hyperbolaSpacingInput?.addEventListener("change", () => {
 
 showBellScenarioInput?.addEventListener("change", () => {
   state.bell.enabled = showBellScenarioInput.checked;
-  if (applyBellProbeFrameLock()) {
+  if (state.bell.enabled) {
+    state.twin.enabled = false;
+  }
+  if (applyScenarioProbeFrameLock()) {
     syncVelocityLabels();
     betaInput.value = String(state.beta);
   }
   syncBellControls();
+  syncTwinControls();
   draw();
 });
 
@@ -2975,7 +3716,7 @@ bellSeparationInput?.addEventListener("change", () => {
 
 bellAccelerationInput?.addEventListener("change", () => {
   state.bell.acceleration = sanitizeBellAcceleration(Number.parseFloat(bellAccelerationInput.value));
-  if (applyBellProbeFrameLock()) {
+  if (applyScenarioProbeFrameLock()) {
     syncVelocityLabels();
     betaInput.value = String(state.beta);
   }
@@ -2985,7 +3726,7 @@ bellAccelerationInput?.addEventListener("change", () => {
 
 bellProbeRocketInput?.addEventListener("change", () => {
   state.bell.probeRocket = bellProbeRocketInput.value === "rear" ? "rear" : "front";
-  if (applyBellProbeFrameLock()) {
+  if (applyScenarioProbeFrameLock()) {
     syncVelocityLabels();
     betaInput.value = String(state.beta);
   }
@@ -2998,7 +3739,7 @@ bellProbeTimeInput?.addEventListener("input", () => {
   if (bellProbeTimeValueInput) {
     bellProbeTimeValueInput.value = state.bell.probeTime.toFixed(2);
   }
-  if (applyBellProbeFrameLock()) {
+  if (applyScenarioProbeFrameLock()) {
     syncVelocityLabels();
     betaInput.value = String(state.beta);
   }
@@ -3011,7 +3752,7 @@ bellProbeTimeValueInput?.addEventListener("change", () => {
     bellProbeTimeInput.value = String(state.bell.probeTime);
   }
   syncBellControls();
-  if (applyBellProbeFrameLock()) {
+  if (applyScenarioProbeFrameLock()) {
     syncVelocityLabels();
     betaInput.value = String(state.beta);
   }
@@ -3020,11 +3761,106 @@ bellProbeTimeValueInput?.addEventListener("change", () => {
 
 bellFollowProbeFrameInput?.addEventListener("change", () => {
   state.bell.followProbeFrame = bellFollowProbeFrameInput.checked;
-  if (applyBellProbeFrameLock()) {
+  if (applyScenarioProbeFrameLock()) {
     syncVelocityLabels();
     betaInput.value = String(state.beta);
   }
   syncBellControls();
+  draw();
+});
+
+bellPinProbeXInput?.addEventListener("change", () => {
+  state.bell.pinProbeX = bellPinProbeXInput.checked;
+  syncBellControls();
+  draw();
+});
+
+bellShowStringLengthInput?.addEventListener("change", () => {
+  state.bell.showStringLength = bellShowStringLengthInput.checked;
+  syncBellControls();
+  draw();
+});
+
+showTwinScenarioInput?.addEventListener("change", () => {
+  state.twin.enabled = showTwinScenarioInput.checked;
+  if (state.twin.enabled) {
+    state.bell.enabled = false;
+  }
+  if (applyScenarioProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncBellControls();
+  syncTwinControls();
+  draw();
+});
+
+twinTravelSpeedInput?.addEventListener("change", () => {
+  state.twin.speed = sanitizeTwinSpeed(Number.parseFloat(twinTravelSpeedInput.value));
+  twinCurveCache = null;
+  if (applyScenarioProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncTwinControls();
+  draw();
+});
+
+twinHalfTripProperTimeInput?.addEventListener("change", () => {
+  state.twin.halfTripProperTime = sanitizeTwinHalfTripProperTime(Number.parseFloat(twinHalfTripProperTimeInput.value));
+  state.twin.probeProperTime = sanitizeTwinProbeProperTime(state.twin.probeProperTime, state.twin.halfTripProperTime);
+  twinCurveCache = null;
+  if (applyScenarioProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncTwinControls();
+  draw();
+});
+
+twinProbeProperTimeInput?.addEventListener("input", () => {
+  state.twin.probeProperTime = sanitizeTwinProbeProperTime(Number.parseFloat(twinProbeProperTimeInput.value));
+  if (twinProbeProperTimeValueInput) {
+    twinProbeProperTimeValueInput.value = state.twin.probeProperTime.toFixed(2);
+  }
+  if (applyScenarioProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  draw();
+});
+
+twinProbeProperTimeValueInput?.addEventListener("change", () => {
+  state.twin.probeProperTime = sanitizeTwinProbeProperTime(Number.parseFloat(twinProbeProperTimeValueInput.value));
+  if (twinProbeProperTimeInput) {
+    twinProbeProperTimeInput.value = String(state.twin.probeProperTime);
+  }
+  syncTwinControls();
+  if (applyScenarioProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  draw();
+});
+
+twinFollowProbeFrameInput?.addEventListener("change", () => {
+  state.twin.followProbeFrame = twinFollowProbeFrameInput.checked;
+  if (applyScenarioProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncTwinControls();
+  draw();
+});
+
+twinSmoothTurnaroundInput?.addEventListener("change", () => {
+  state.twin.smoothTurnaround = twinSmoothTurnaroundInput.checked;
+  twinCurveCache = null;
+  if (applyScenarioProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncTwinControls();
   draw();
 });
 
@@ -3261,9 +4097,10 @@ hideAxesAndLinesInput.checked = state.hideAxesAndLines;
 syncAxisVisibilityEditControls();
 syncToolControls();
 syncLastUpdatedNote();
-applyBellProbeFrameLock();
+applyScenarioProbeFrameLock();
 syncVelocityLabels();
 syncRectifyControls();
 syncBellControls();
+syncTwinControls();
 syncHyperbolaControls();
 resizeCanvas();
