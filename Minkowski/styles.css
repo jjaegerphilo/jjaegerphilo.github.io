@@ -288,6 +288,62 @@ select {
   display: none !important;
 }
 
+.bell-controls[hidden] {
+  display: none !important;
+}
+
+.bell-controls {
+  display: grid;
+  gap: 0.28rem;
+  margin-top: 0.12rem;
+}
+
+.toggle-panel .bell-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.toggle-panel .bell-field input[type="number"],
+.toggle-panel .bell-field select {
+  width: 4.9rem;
+  padding: 0.16rem 0.26rem;
+  font-size: 0.8rem;
+}
+
+.bell-probe-row {
+  display: grid;
+  gap: 0.26rem;
+}
+
+.toggle-panel .bell-probe-range {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.toggle-panel .bell-probe-range input[type="range"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.toggle-panel .bell-probe-value {
+  justify-content: flex-end;
+}
+
+.toggle-panel .bell-probe-value input[type="number"] {
+  width: 4.4rem;
+}
+
+.toggle-panel .bell-lock-frame {
+  margin-top: 0.05rem;
+  margin-bottom: 0;
+}
+
 button {
   border: 1px solid #b8c2c9;
   background: white;

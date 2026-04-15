@@ -18,6 +18,14 @@ const clipToHyperbolaeInput = document.getElementById("clipToHyperbolae");
 const hyperbolaSpacingLabel = document.getElementById("hyperbolaSpacingLabel");
 const hyperbolaSpacingInput = document.getElementById("hyperbolaSpacing");
 const showHyperbolaPointsInput = document.getElementById("showHyperbolaPoints");
+const showBellScenarioInput = document.getElementById("showBellScenario");
+const bellScenarioControls = document.getElementById("bellScenarioControls");
+const bellSeparationInput = document.getElementById("bellSeparation");
+const bellAccelerationInput = document.getElementById("bellAcceleration");
+const bellProbeRocketInput = document.getElementById("bellProbeRocket");
+const bellProbeTimeInput = document.getElementById("bellProbeTime");
+const bellProbeTimeValueInput = document.getElementById("bellProbeTimeValue");
+const bellFollowProbeFrameInput = document.getElementById("bellFollowProbeFrame");
 const showAxisCoordinatesInput = document.getElementById("showAxisCoordinates");
 const showReferenceAxisCoordinatesInput = document.getElementById("showReferenceAxisCoordinates");
 const showBoostedPointGuidesInput = document.getElementById("showBoostedPointGuides");
@@ -70,6 +78,14 @@ const state = {
   hyperbolaSpacing: 2,
   clipToHyperbolae: false,
   showHyperbolaPoints: false,
+  bell: {
+    enabled: false,
+    separation: 4,
+    acceleration: 0.22,
+    probeRocket: "front",
+    probeTime: 6,
+    followProbeFrame: false
+  },
   showAxisCoordinates: true,
   showReferenceAxisCoordinates: true,
   showBoostedPointGuides: false,
@@ -108,6 +124,12 @@ const DEFAULT_HYPERBOLA_SPACING = 2;
 const MAX_HYPERBOLA_LEVEL = 21;
 const MIN_HYPERBOLA_X_EXTENT = 21;
 const HYPERBOLA_MARKER_RAPIDITY_STEP = 0.45;
+const MIN_BELL_SEPARATION = 0.5;
+const MAX_BELL_SEPARATION = 12;
+const MIN_BELL_ACCELERATION = 0.05;
+const MAX_BELL_ACCELERATION = 0.8;
+const MAX_BELL_PROBE_TIME = 10;
+const BELL_DRAG_THRESHOLD_PX = 11;
 const DEFAULT_COPY_VIEWPORT = {
   xMin: -13,
   xMax: 13,
@@ -158,6 +180,195 @@ function getHyperbolaLevels() {
 
 function getLightConeMarkerStep() {
   return sanitizeHyperbolaSpacing(state.hyperbolaSpacing);
+}
+
+function sanitizeBellSeparation(value) {
+  if (!Number.isFinite(value)) {
+    return 4;
+  }
+
+  return Math.max(MIN_BELL_SEPARATION, Math.min(MAX_BELL_SEPARATION, value));
+}
+
+function sanitizeBellAcceleration(value) {
+  if (!Number.isFinite(value)) {
+    return 0.22;
+  }
+
+  return Math.max(MIN_BELL_ACCELERATION, Math.min(MAX_BELL_ACCELERATION, value));
+}
+
+function sanitizeBellProbeTime(value) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(MAX_BELL_PROBE_TIME, value));
+}
+
+function otherBellRocket(rocket) {
+  return rocket === "rear" ? "front" : "rear";
+}
+
+function bellRocketOffset(rocket) {
+  return rocket === "front" ? state.bell.separation : 0;
+}
+
+function bellRocketXAtTime(rocket, referenceTime) {
+  const offset = bellRocketOffset(rocket);
+  if (referenceTime <= 0) {
+    return offset;
+  }
+
+  const scaledTime = state.bell.acceleration * referenceTime;
+  return offset + (Math.sqrt(1 + scaledTime * scaledTime) - 1) / state.bell.acceleration;
+}
+
+function bellRocketPointAtTime(rocket, referenceTime) {
+  return {
+    x: bellRocketXAtTime(rocket, referenceTime),
+    t: referenceTime
+  };
+}
+
+function bellRocketVelocityAtTime(referenceTime) {
+  if (referenceTime <= 0) {
+    return 0;
+  }
+
+  const scaledTime = state.bell.acceleration * referenceTime;
+  return scaledTime / Math.sqrt(1 + scaledTime * scaledTime);
+}
+
+function bellRocketRapidityAtTime(referenceTime) {
+  if (referenceTime <= 0) {
+    return 0;
+  }
+
+  return Math.asinh(state.bell.acceleration * referenceTime);
+}
+
+function bellRocketProperTimeAtTime(referenceTime) {
+  if (referenceTime < 0) {
+    return null;
+  }
+
+  if (referenceTime === 0) {
+    return 0;
+  }
+
+  return bellRocketRapidityAtTime(referenceTime) / state.bell.acceleration;
+}
+
+function getBellRocketState(rocket, referenceTime) {
+  const safeTime = Number.isFinite(referenceTime) ? referenceTime : 0;
+  return {
+    rocket,
+    referenceTime: safeTime,
+    point: bellRocketPointAtTime(rocket, safeTime),
+    velocity: bellRocketVelocityAtTime(safeTime),
+    rapidity: bellRocketRapidityAtTime(safeTime),
+    properTime: bellRocketProperTimeAtTime(safeTime)
+  };
+}
+
+function getBellProbeState() {
+  return getBellRocketState(state.bell.probeRocket, state.bell.probeTime);
+}
+
+function findBellSimultaneousReferenceTime(probeState, rocket) {
+  const beta = probeState.velocity;
+  if (Math.abs(beta) < 1e-9) {
+    return probeState.referenceTime;
+  }
+
+  const f = (referenceTime) => (
+    referenceTime -
+    probeState.referenceTime -
+    beta * (bellRocketXAtTime(rocket, referenceTime) - probeState.point.x)
+  );
+  let lower = -Math.max(8, state.bell.separation * 2 + probeState.referenceTime + 2);
+  let upper = Math.max(8, state.bell.separation * 2 + probeState.referenceTime + 2);
+
+  while (f(lower) > 0) {
+    lower *= 1.8;
+  }
+
+  while (f(upper) < 0) {
+    upper *= 1.8;
+  }
+
+  for (let i = 0; i < 70; i += 1) {
+    const midpoint = (lower + upper) * 0.5;
+    if (f(midpoint) < 0) {
+      lower = midpoint;
+    } else {
+      upper = midpoint;
+    }
+  }
+
+  return (lower + upper) * 0.5;
+}
+
+function getBellScenarioGeometry() {
+  if (!state.bell.enabled) {
+    return null;
+  }
+
+  const probe = getBellProbeState();
+  const otherRocket = otherBellRocket(probe.rocket);
+  const simultaneousTime = findBellSimultaneousReferenceTime(probe, otherRocket);
+  const simultaneous = getBellRocketState(otherRocket, simultaneousTime);
+  const labSimultaneous = getBellRocketState(otherRocket, probe.referenceTime);
+
+  return {
+    probe,
+    otherRocket,
+    simultaneous,
+    labSimultaneous,
+    localGap: intervalMetrics(probe.point, simultaneous.point),
+    labGap: intervalMetrics(probe.point, labSimultaneous.point)
+  };
+}
+
+function findNearestBellProbeTime(screenPoint, rocket) {
+  let bestTime = sanitizeBellProbeTime(screenToWorld(screenPoint).t);
+  let bestDistanceSquared = Infinity;
+  let span = 2.2;
+
+  for (let pass = 0; pass < 5; pass += 1) {
+    const start = Math.max(0, bestTime - span);
+    const end = Math.min(MAX_BELL_PROBE_TIME, bestTime + span);
+    const steps = 16;
+
+    for (let i = 0; i <= steps; i += 1) {
+      const sampleTime = start + ((end - start) * i) / steps;
+      const samplePoint = worldToScreen(bellRocketPointAtTime(rocket, sampleTime));
+      const distanceSquared = pointDistanceSquared(screenPoint, samplePoint);
+      if (distanceSquared < bestDistanceSquared) {
+        bestDistanceSquared = distanceSquared;
+        bestTime = sampleTime;
+      }
+    }
+
+    span *= 0.35;
+  }
+
+  return sanitizeBellProbeTime(bestTime);
+}
+
+function applyBellProbeFrameLock() {
+  if (!state.bell.enabled || !state.bell.followProbeFrame) {
+    return false;
+  }
+
+  const lockedBeta = clampBetaToControlRange(getBellProbeState().velocity);
+  if (Math.abs(lockedBeta - state.beta) < 1e-9) {
+    return false;
+  }
+
+  state.beta = lockedBeta;
+  return true;
 }
 
 function renderBeta() {
@@ -1696,6 +1907,250 @@ function drawHyperbolaPoints() {
   ctx.restore();
 }
 
+function drawBellWorldlineSegment(samples, color, width, dash = []) {
+  if (samples.length < 2) {
+    return;
+  }
+
+  plotWorldCurve(samples, color, width, dash, worldToScreen);
+}
+
+function drawBellEventMarker(point, options = {}) {
+  const {
+    radius = 4.8,
+    fill = "#ffffff",
+    stroke = "rgba(17, 32, 43, 0.85)",
+    lineWidth = 1.5
+  } = options;
+  const screenPoint = worldToScreen(point);
+  if (
+    screenPoint.x < -12 ||
+    screenPoint.x > view.width + 12 ||
+    screenPoint.y < -12 ||
+    screenPoint.y > view.height + 12
+  ) {
+    return;
+  }
+
+  ctx.save();
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.arc(screenPoint.x, screenPoint.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBellFrameAxis(point, direction, color, label) {
+  const extent = Math.max(getWorldBounds().maxX, getWorldBounds().maxT, 6) * 2.5;
+  const startWorld = {
+    x: point.x - direction.x * extent,
+    t: point.t - direction.t * extent
+  };
+  const endWorld = {
+    x: point.x + direction.x * extent,
+    t: point.t + direction.t * extent
+  };
+  const start = worldToScreen(startWorld);
+  const end = worldToScreen(endWorld);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([10, 6]);
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = color;
+  ctx.font = "15px IBM Plex Sans, Segoe UI, sans-serif";
+  drawClampedAxisLabel(label, start, end, {
+    inset: 22,
+    alongOffset: 18,
+    normalOffset: 9
+  });
+  ctx.restore();
+}
+
+function drawBellSegmentLabel(startPoint, endPoint, text, color) {
+  const start = worldToScreen(startPoint);
+  const end = worldToScreen(endPoint);
+  const midpoint = {
+    x: (start.x + end.x) * 0.5,
+    y: (start.y + end.y) * 0.5
+  };
+
+  ctx.save();
+  ctx.font = "11px IBM Plex Sans, Segoe UI, sans-serif";
+  const paddingX = 5;
+  const textWidth = ctx.measureText(text).width;
+  const boxWidth = textWidth + paddingX * 2;
+  const boxHeight = 16;
+  const boxX = midpoint.x - boxWidth * 0.5;
+  const boxY = midpoint.y - 20;
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+  ctx.strokeStyle = "rgba(40, 55, 66, 0.22)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.rect(boxX, boxY, boxWidth, boxHeight);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  ctx.fillText(text, boxX + paddingX, boxY + 11.5);
+  ctx.restore();
+}
+
+function drawBellScenarioOverlay(geometry) {
+  const probeLabel = geometry.probe.rocket === "front" ? "front" : "rear";
+  const otherLabel = geometry.otherRocket === "front" ? "front" : "rear";
+  const simultaneousClock = geometry.simultaneous.properTime == null
+    ? "before ignition"
+    : `tau = ${formatCoordinateValue(geometry.simultaneous.properTime)}`;
+  const lines = [
+    `Bell probe: ${probeLabel} rocket at lab t = ${formatCoordinateValue(geometry.probe.referenceTime)}`,
+    `probe clock tau = ${formatCoordinateValue(geometry.probe.properTime ?? 0)}, v = ${formatVelocityPercent(geometry.probe.velocity)} of c`,
+    `${otherLabel} simultaneous event: lab t = ${formatCoordinateValue(geometry.simultaneous.referenceTime)}, ${simultaneousClock}`,
+    `launch-frame gap = ${geometry.labGap.absS.toFixed(3)}`,
+    `probe-frame gap = ${geometry.localGap.absS.toFixed(3)}`
+  ];
+
+  if (state.bell.followProbeFrame) {
+    lines.push("boosted frame locked to probe velocity");
+  }
+
+  ctx.save();
+  ctx.font = "12px IBM Plex Sans, Segoe UI, sans-serif";
+  const paddingX = 8;
+  const lineHeight = 15;
+  const boxWidth = Math.max(...lines.map((line) => ctx.measureText(line).width)) + paddingX * 2;
+  const boxHeight = lines.length * lineHeight + 10;
+  const boxX = 12;
+  const boxY = 12;
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.strokeStyle = "rgba(40, 55, 66, 0.3)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.rect(boxX, boxY, boxWidth, boxHeight);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(17, 32, 43, 0.96)";
+  for (let i = 0; i < lines.length; i += 1) {
+    ctx.fillText(lines[i], boxX + paddingX, boxY + 15 + i * lineHeight);
+  }
+  ctx.restore();
+}
+
+function drawBellScenario() {
+  const geometry = getBellScenarioGeometry();
+  if (!geometry) {
+    return;
+  }
+
+  const bounds = getWorldBounds();
+  const minT = -Math.max(bounds.maxT * 1.05, 1.5);
+  const maxT = Math.max(bounds.maxT * 1.05, 1.5);
+  const sampleStep = Math.max(0.05, (maxT - Math.max(0, minT)) / 220);
+  const rocketColors = {
+    rear: "#1765a3",
+    front: "#bb6b18"
+  };
+
+  for (const rocket of ["rear", "front"]) {
+    const color = rocketColors[rocket];
+    const beforeSamples = [];
+    if (minT < 0) {
+      for (let t = minT; t <= Math.min(0, maxT); t += sampleStep) {
+        beforeSamples.push(bellRocketPointAtTime(rocket, t));
+      }
+      beforeSamples.push(bellRocketPointAtTime(rocket, Math.min(0, maxT)));
+      drawBellWorldlineSegment(beforeSamples, `${color}88`, 1.5, [6, 5]);
+    }
+
+    if (maxT > 0) {
+      const afterSamples = [];
+      for (let t = 0; t <= maxT; t += sampleStep) {
+        afterSamples.push(bellRocketPointAtTime(rocket, t));
+      }
+      afterSamples.push(bellRocketPointAtTime(rocket, maxT));
+      drawBellWorldlineSegment(afterSamples, color, 2.5);
+    }
+  }
+
+  ctx.save();
+  ctx.font = "12px IBM Plex Sans, Segoe UI, sans-serif";
+  for (const rocket of ["rear", "front"]) {
+    const labelTime = Math.max(0.6, Math.min(maxT * 0.72, MAX_BELL_PROBE_TIME));
+    const labelPoint = worldToScreen(bellRocketPointAtTime(rocket, labelTime));
+    ctx.fillStyle = rocketColors[rocket];
+    ctx.fillText(rocket === "rear" ? "Rear" : "Front", labelPoint.x + 7, labelPoint.y - 7);
+  }
+  ctx.restore();
+
+  const probeRapidity = geometry.probe.rapidity;
+  const localXAxisDirection = {
+    x: Math.cosh(probeRapidity),
+    t: Math.sinh(probeRapidity)
+  };
+  const localTAxisDirection = {
+    x: Math.sinh(probeRapidity),
+    t: Math.cosh(probeRapidity)
+  };
+  drawBellFrameAxis(geometry.probe.point, localXAxisDirection, "rgba(13, 122, 141, 0.62)", "x*");
+  drawBellFrameAxis(geometry.probe.point, localTAxisDirection, "rgba(154, 88, 16, 0.62)", "t*");
+
+  ctx.save();
+  ctx.setLineDash([6, 5]);
+  ctx.strokeStyle = "rgba(78, 91, 101, 0.6)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  const labStart = worldToScreen(geometry.probe.point);
+  const labEnd = worldToScreen(geometry.labSimultaneous.point);
+  ctx.moveTo(labStart.x, labStart.y);
+  ctx.lineTo(labEnd.x, labEnd.y);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "rgba(194, 102, 28, 0.95)";
+  ctx.lineWidth = 2.3;
+  ctx.beginPath();
+  const localEnd = worldToScreen(geometry.simultaneous.point);
+  ctx.moveTo(labStart.x, labStart.y);
+  ctx.lineTo(localEnd.x, localEnd.y);
+  ctx.stroke();
+  ctx.restore();
+
+  drawBellEventMarker(geometry.labSimultaneous.point, {
+    radius: 3.2,
+    fill: "rgba(255, 255, 255, 0.92)",
+    stroke: "rgba(78, 91, 101, 0.72)",
+    lineWidth: 1.2
+  });
+  drawBellEventMarker(geometry.simultaneous.point, {
+    radius: 4.4,
+    fill: "rgba(255, 249, 239, 0.96)",
+    stroke: "rgba(194, 102, 28, 0.95)",
+    lineWidth: 1.8
+  });
+  drawBellEventMarker(geometry.probe.point, {
+    radius: 5.2,
+    fill: "#ffffff",
+    stroke: rocketColors[geometry.probe.rocket],
+    lineWidth: 2.5
+  });
+
+  drawBellSegmentLabel(geometry.probe.point, geometry.labSimultaneous.point, "launch frame", "rgba(78, 91, 101, 0.84)");
+  drawBellSegmentLabel(geometry.probe.point, geometry.simultaneous.point, "probe frame", "rgba(194, 102, 28, 0.95)");
+
+  drawBellScenarioOverlay(geometry);
+}
+
 function drawStrokes() {
   ctx.save();
   ctx.lineJoin = "round";
@@ -1997,6 +2452,9 @@ function draw() {
   if (!state.hideAxesAndLines) {
     drawAxes();
   }
+  if (state.bell.enabled) {
+    drawBellScenario();
+  }
   if (state.showHyperbolaPoints) {
     drawHyperbolaPoints();
   }
@@ -2044,6 +2502,23 @@ function startStroke(event) {
       hideAxisVisibilityTarget(axisTarget);
     }
     return;
+  }
+  if (state.bell.enabled) {
+    const bellGeometry = getBellScenarioGeometry();
+    const probeScreenPoint = bellGeometry ? worldToScreen(bellGeometry.probe.point) : null;
+    if (
+      probeScreenPoint &&
+      pointDistanceSquared(screenPoint, probeScreenPoint) <= BELL_DRAG_THRESHOLD_PX * BELL_DRAG_THRESHOLD_PX
+    ) {
+      state.drawing = true;
+      state.drawMode = "bellProbe";
+      state.draggingShape = false;
+      state.currentPointerId = event.pointerId;
+      state.currentGroupId = null;
+      canvas.setPointerCapture(event.pointerId);
+      canvas.style.cursor = "grabbing";
+      return;
+    }
   }
 
   if (state.activeTool === "eraser") {
@@ -2164,6 +2639,22 @@ function updateStroke(event) {
     return;
   }
 
+  if (state.drawMode === "bellProbe") {
+    state.bell.probeTime = findNearestBellProbeTime(eventToScreenPoint(event), state.bell.probeRocket);
+    if (bellProbeTimeInput) {
+      bellProbeTimeInput.value = String(state.bell.probeTime);
+    }
+    if (bellProbeTimeValueInput) {
+      bellProbeTimeValueInput.value = state.bell.probeTime.toFixed(2);
+    }
+    if (applyBellProbeFrameLock()) {
+      syncVelocityLabels();
+      betaInput.value = String(state.beta);
+    }
+    draw();
+    return;
+  }
+
   if (state.drawMode !== "stroke") {
     return;
   }
@@ -2207,6 +2698,17 @@ function endStroke(event) {
     state.currentPointerId = null;
     state.currentGroupId = null;
     canvas.releasePointerCapture(event.pointerId);
+    return;
+  }
+
+  if (state.drawMode === "bellProbe") {
+    state.drawing = false;
+    state.drawMode = null;
+    state.currentPointerId = null;
+    state.currentGroupId = null;
+    canvas.releasePointerCapture(event.pointerId);
+    syncToolControls();
+    draw();
     return;
   }
 
@@ -2260,6 +2762,47 @@ function syncRectifyControls() {
   rectifyAmountInput.disabled = !state.rectifyViewEnabled;
   rectifyAmountInput.value = String(state.rectifyAmount);
   syncRectifyLabels();
+}
+
+function syncBellControls() {
+  const controlsVisible = state.bell.enabled;
+  if (showBellScenarioInput) {
+    showBellScenarioInput.checked = state.bell.enabled;
+  }
+  if (bellScenarioControls) {
+    bellScenarioControls.hidden = !controlsVisible;
+    bellScenarioControls.setAttribute("aria-hidden", controlsVisible ? "false" : "true");
+    bellScenarioControls.style.display = controlsVisible ? "grid" : "none";
+  }
+  if (bellSeparationInput) {
+    bellSeparationInput.value = state.bell.separation.toFixed(1);
+    bellSeparationInput.disabled = !controlsVisible;
+  }
+  if (bellAccelerationInput) {
+    bellAccelerationInput.value = state.bell.acceleration.toFixed(2);
+    bellAccelerationInput.disabled = !controlsVisible;
+  }
+  if (bellProbeRocketInput) {
+    bellProbeRocketInput.value = state.bell.probeRocket;
+    bellProbeRocketInput.disabled = !controlsVisible;
+  }
+  if (bellProbeTimeInput) {
+    bellProbeTimeInput.value = String(state.bell.probeTime);
+    bellProbeTimeInput.disabled = !controlsVisible;
+  }
+  if (bellProbeTimeValueInput) {
+    bellProbeTimeValueInput.value = state.bell.probeTime.toFixed(2);
+    bellProbeTimeValueInput.disabled = !controlsVisible;
+  }
+  if (bellFollowProbeFrameInput) {
+    bellFollowProbeFrameInput.checked = state.bell.followProbeFrame;
+    bellFollowProbeFrameInput.disabled = !controlsVisible;
+  }
+
+  const lockVelocityControls = controlsVisible && state.bell.followProbeFrame;
+  betaInput.disabled = lockVelocityControls;
+  betaValue.disabled = lockVelocityControls;
+  gammaValue.disabled = lockVelocityControls;
 }
 
 function syncHyperbolaControls() {
@@ -2411,6 +2954,77 @@ hyperbolaSpacingInput?.addEventListener("change", () => {
     Number.parseFloat(hyperbolaSpacingInput.value)
   );
   syncHyperbolaControls();
+  draw();
+});
+
+showBellScenarioInput?.addEventListener("change", () => {
+  state.bell.enabled = showBellScenarioInput.checked;
+  if (applyBellProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncBellControls();
+  draw();
+});
+
+bellSeparationInput?.addEventListener("change", () => {
+  state.bell.separation = sanitizeBellSeparation(Number.parseFloat(bellSeparationInput.value));
+  syncBellControls();
+  draw();
+});
+
+bellAccelerationInput?.addEventListener("change", () => {
+  state.bell.acceleration = sanitizeBellAcceleration(Number.parseFloat(bellAccelerationInput.value));
+  if (applyBellProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncBellControls();
+  draw();
+});
+
+bellProbeRocketInput?.addEventListener("change", () => {
+  state.bell.probeRocket = bellProbeRocketInput.value === "rear" ? "rear" : "front";
+  if (applyBellProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncBellControls();
+  draw();
+});
+
+bellProbeTimeInput?.addEventListener("input", () => {
+  state.bell.probeTime = sanitizeBellProbeTime(Number.parseFloat(bellProbeTimeInput.value));
+  if (bellProbeTimeValueInput) {
+    bellProbeTimeValueInput.value = state.bell.probeTime.toFixed(2);
+  }
+  if (applyBellProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  draw();
+});
+
+bellProbeTimeValueInput?.addEventListener("change", () => {
+  state.bell.probeTime = sanitizeBellProbeTime(Number.parseFloat(bellProbeTimeValueInput.value));
+  if (bellProbeTimeInput) {
+    bellProbeTimeInput.value = String(state.bell.probeTime);
+  }
+  syncBellControls();
+  if (applyBellProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  draw();
+});
+
+bellFollowProbeFrameInput?.addEventListener("change", () => {
+  state.bell.followProbeFrame = bellFollowProbeFrameInput.checked;
+  if (applyBellProbeFrameLock()) {
+    syncVelocityLabels();
+    betaInput.value = String(state.beta);
+  }
+  syncBellControls();
   draw();
 });
 
@@ -2647,7 +3261,9 @@ hideAxesAndLinesInput.checked = state.hideAxesAndLines;
 syncAxisVisibilityEditControls();
 syncToolControls();
 syncLastUpdatedNote();
+applyBellProbeFrameLock();
 syncVelocityLabels();
 syncRectifyControls();
+syncBellControls();
 syncHyperbolaControls();
 resizeCanvas();

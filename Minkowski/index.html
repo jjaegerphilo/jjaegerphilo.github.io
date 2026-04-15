@@ -157,6 +157,44 @@
             Hyperbola points
           </label>
         </section>
+        <section class="toggle-panel">
+          <h2 class="panel-title">Bell Rockets</h2>
+          <label class="check">
+            <input id="showBellScenario" type="checkbox" />
+            Bell's rockets
+          </label>
+          <div id="bellScenarioControls" class="bell-controls" hidden>
+            <label class="copy-range-field bell-field" for="bellSeparation">
+              <span>Separation L</span>
+              <input id="bellSeparation" type="number" min="0.5" max="12" step="0.1" value="4.0" />
+            </label>
+            <label class="copy-range-field bell-field" for="bellAcceleration">
+              <span>Proper accel a</span>
+              <input id="bellAcceleration" type="number" min="0.05" max="0.8" step="0.01" value="0.22" />
+            </label>
+            <label class="copy-range-field bell-field" for="bellProbeRocket">
+              <span>Probe rocket</span>
+              <select id="bellProbeRocket">
+                <option value="front">Front</option>
+                <option value="rear">Rear</option>
+              </select>
+            </label>
+            <div class="bell-probe-row">
+              <label class="copy-range-field bell-field bell-probe-range" for="bellProbeTime">
+                <span>Probe lab time</span>
+                <input id="bellProbeTime" type="range" min="0" max="10" step="0.05" value="6" />
+              </label>
+              <label class="copy-range-field bell-field bell-probe-value" for="bellProbeTimeValue">
+                <span>t</span>
+                <input id="bellProbeTimeValue" type="number" min="0" max="10" step="0.05" value="6.00" />
+              </label>
+            </div>
+            <label class="check bell-lock-frame">
+              <input id="bellFollowProbeFrame" type="checkbox" />
+              Lock boosted frame to probe
+            </label>
+          </div>
+        </section>
       </div>
       <div class="row">
         <label for="beta">Relative velocity between frames (% of c)</label>
@@ -202,6 +240,7 @@
           With Equal-distance hyperboles on, Clip snaps line endpoints to the nearest displayed hyperbola.
           Use the hyperbola spacing box to choose how densely those equal-distance curves are drawn.
           Hyperbola points mark sample events on the equal-distance curves and light cones.
+          Bell's rockets adds the standard equal-lab-separation acceleration case with a draggable probe event, its local simultaneity slice, and an optional lock that matches the boosted frame to that probe velocity.
           Hide axes &amp; drawn lines temporarily clears the frame axes and user-drawn line segments without deleting them.
         </p>
       </div>
