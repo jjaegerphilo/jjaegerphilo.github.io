@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Double-Slit Experiment Simulator</title>
+<style>
+  :root {
+    --bg: #07070d;
+    --panel: #101018;
+    --panel2: #181824;
+    --border: #24243a;
+    --text: #e3e3ee;
+    --muted: #6d6d88;
+    --accent: #6ba7ff;
+    --accent2: #5aefc9;
+    --warn: #ff8a6b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  body { padding: 22px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; margin: 4px 0 18px; max-width: 820px; line-height: 1.5; }
+  .container { max-width: 1220px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .panel h3 {
+    margin: 0 0 10px;
+    font-size: 12px; font-weight: 700;
+    color: #aab4c8;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  canvas { display: block; background: #000; border-radius: 6px; width: 100%; height: auto; }
+  .controls { display: flex; flex-wrap: wrap; gap: 18px 24px; align-items: flex-start; }
+  .group { display: flex; flex-direction: column; gap: 6px; }
+  .group > label {
+    color: var(--muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-weight: 700;
+  }
+  .buttons { display: flex; gap: 6px; }
+  .btn {
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 13px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  }
+  .btn:hover { background: #23233a; }
+  .btn.active {
+    background: rgba(107,167,255,0.18);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn.warn.active {
+    background: rgba(255,138,107,0.18);
+    border-color: var(--warn);
+    color: #fff;
+  }
+  input[type=range] {
+    width: 220px;
+    accent-color: var(--accent);
+  }
+  .slider-wrap { display: flex; align-items: center; gap: 10px; }
+  .val {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--accent2);
+    min-width: 52px;
+    display: inline-block;
+  }
+  .legend {
+    display: flex; gap: 14px; font-size: 11px; color: var(--muted);
+    align-items: center; flex-wrap: wrap; margin-top: 8px;
+  }
+  .swatch {
+    width: 14px; height: 12px; border-radius: 3px;
+    display: inline-block; margin-right: 4px; vertical-align: middle;
+  }
+  .notes { color: #a6a6be; font-size: 12.5px; line-height: 1.6; }
+  .notes p { margin: 0 0 8px; }
+  .notes em { color: var(--muted); }
+  .notes strong { color: #d9d9ea; }
+  .side-by-side { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  @media (max-width: 900px) { .side-by-side { grid-template-columns: 1fr; } }
+  .hidden { display: none !important; }
+  .chip {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--panel2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    font-family: ui-monospace, monospace;
+  }
+  .chip.live { color: var(--accent2); border-color: #2d5a5a; }
+  .chiprow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div>
+    <h1>Double-Slit Experiment · Interactive Simulator</h1>
+    <div class="sub">
+      A wave packet is launched toward two slits. Toggle whether a single pointer particle measures which slit the
+      electron passed through; watch the interference pattern appear and disappear; open the configuration-space panel
+      to see the full entangled wavefunction <span style="font-family:monospace;color:#bcd">Ψ(y, z, t)</span> of the
+      joint electron–pointer system.
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="panel">
+    <div class="controls">
+      <div class="group">
+        <label>Time (manual)</label>
+        <div class="slider-wrap">
+          <input type="range" id="timeSlider" min="0" max="1000" value="0" step="1" />
+          <span class="val" id="timeVal">0.0</span>
+        </div>
+      </div>
+
+      <div class="group">
+        <label>Playback</label>
+        <div class="buttons">
+          <button class="btn" id="playBtn">▶ Play</button>
+          <button class="btn" id="resetBtn">↺ Reset</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <label>Speed</label>
+        <div class="slider-wrap">
+          <input type="range" id="speedSlider" min="0.1" max="3" value="1" step="0.1" />
+          <span class="val" id="speedVal">1.0×</span>
+        </div>
+      </div>
+
+      <div class="group">
+        <label>Setup</label>
+        <div class="buttons">
+          <button class="btn active" id="setupDoubleBtn">Double slit</button>
+          <button class="btn" id="setupSingleBtn">Single slit</button>
+        </div>
+      </div>
+
+      <div class="group" id="apertureGroup" style="display:none;">
+        <label>Aperture width (w)</label>
+        <div class="slider-wrap">
+          <input type="range" id="apertureSlider" min="2" max="50" value="30" step="1" />
+          <span class="val" id="apertureVal">30</span>
+        </div>
+      </div>
+
+      <div class="group" id="observeGroup">
+        <label>Observe which slit?</label>
+        <div class="buttons">
+          <button class="btn active" id="obsOffBtn">Off</button>
+          <button class="btn warn" id="obsOnBtn">On</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <label>Main view</label>
+        <div class="buttons">
+          <button class="btn active" id="viewWaveBtn">Wavefunction</button>
+          <button class="btn" id="viewParticlesBtn">Particle hits</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <label>Configuration space Ψ(y, z)</label>
+        <div class="buttons">
+          <button class="btn" id="configBtn">Show</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <label>Status</label>
+        <div class="chiprow">
+          <span class="chip" id="statusT">t = 0.00</span>
+          <span class="chip" id="statusOverlap">⟨φ_up|φ_dn⟩ = 1.000</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN VIEW + SCREEN -->
+  <div class="side-by-side">
+    <div class="panel">
+      <h3>Electron probability density — top-down view</h3>
+      <canvas id="mainCanvas" width="840" height="360"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background: linear-gradient(90deg,#000,#2a1155,#a02590,#ffb04a,#fffdd0);"></span>|ψ<sub>e</sub>(x,y)|² intensity</span>
+        <span><span class="swatch" style="background:#2db6ff;"></span>Source</span>
+        <span><span class="swatch" style="background:#666;"></span>Barrier</span>
+        <span><span class="swatch" style="background:#aaa;"></span>Detection screen</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Detection screen</h3>
+      <canvas id="screenCanvas" width="360" height="360"></canvas>
+      <div class="legend">
+        <span id="screenLegend"><span class="swatch" style="background:#5aefc9;"></span>|ψ(x<sub>screen</sub>, y)|² (live)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIG SPACE -->
+  <div class="panel hidden" id="configPanel">
+    <h3>Configuration space — joint probability |Ψ(y, z, t)|² at the screen</h3>
+    <canvas id="configCanvas" width="840" height="360"></canvas>
+    <div class="notes" style="margin-top:10px;">
+      <p>
+        <strong>Horizontal axis:</strong> electron transverse position <em>y</em> at the detection screen.
+        <strong>Vertical axis:</strong> pointer-particle position <em>z</em>. Before the slit, Ψ factorizes as
+        ψ<sub>e</sub>(y)·φ<sub>0</sub>(z) — a single lump near z = 0. After the slit with measurement ON, the pointer
+        splits into two lumps moving in opposite z directions, each <em>entangled</em> with one slit-path. As the
+        pointer wave packets separate, their overlap ⟨φ<sub>up</sub>|φ<sub>dn</sub>⟩ drops to zero — the marginal
+        electron distribution along y loses its fringes. This is decoherence in a single-particle bath.
+      </p>
+    </div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="panel">
+    <div class="notes">
+      <p>
+        <strong>Setup.</strong> A coherent electron Gaussian packet approaches a barrier with two narrow slits.
+        Downstream lies a detection screen. A single pointer particle lives in an extra dimension <em>z</em>, coupled
+        to the slit when the Observe toggle is ON: it is nudged to +z if the electron went through the upper slit, to
+        −z if it went through the lower slit.
+      </p>
+      <p>
+        <strong>No observation.</strong> The joint state stays factorable: Ψ(y, z, t) = ψ<sub>e</sub>(y, t)·φ<sub>0</sub>(z).
+        The slit amplitudes ψ<sub>up</sub> + ψ<sub>dn</sub> add <em>coherently</em>: |ψ<sub>up</sub> + ψ<sub>dn</sub>|²
+        shows the classic interference fringes on the screen.
+      </p>
+      <p>
+        <strong>With observation.</strong> After the electron traverses the slit, the state is entangled:
+        Ψ = ψ<sub>up</sub>·φ<sub>up</sub> + ψ<sub>dn</sub>·φ<sub>dn</sub>. The displayed screen probability
+        traces over the pointer: |ψ<sub>up</sub>|² + |ψ<sub>dn</sub>|² + 2·⟨φ<sub>up</sub>|φ<sub>dn</sub>⟩·Re(ψ<sub>up</sub>*ψ<sub>dn</sub>).
+        The pointer overlap decays as a Gaussian of the pointer separation, and the cross term — the interference —
+        vanishes. Which-path information now lives in the pointer.
+      </p>
+      <p>
+        <em>
+          Physics is stylized for real-time rendering: free-particle Gaussian wave packets with pragmatic spreading,
+          not a finite-difference Schrödinger solve. But the qualitative features — fringes, diffraction envelope,
+          which-path decoherence, entanglement structure in configuration space — are faithful.
+        </em>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+ * STATE & PARAMETERS
+ * ============================================================ */
+const params = {
+  // Main canvas (pixels)
+  mainW: 840, mainH: 360,
+  // Internal compute grid for the wavefunction heatmap (coarser = faster)
+  gridW: 280, gridH: 120,
+  // World coordinate window
+  xMin: 0, xMax: 280,
+  yMin: -60, yMax: 60,
+  // Geometry in world coordinates
+  initialX: 36,
+  slitX: 92,
+  slitSep: 40,      // distance between slit centers
+  slitHalfGap: 5,   // half vertical gap of each slit for drawing
+  screenX: 250,
+  // Electron wave packet physics (ℏ = m = 1; momentum k equals velocity v)
+  packetSpeed: 1.0,   // = kWave (required: matter-wave group velocity = momentum)
+  sigma0: 14,         // initial Gaussian width (both x and y) for ψ ∝ exp(-r²/(4σ₀²))
+  sigmaSlitY: 2.5,    // y-width of wave packet emerging from each slit
+  sigmaSlitX: 14,     // x-width of wave packet emerging from each slit
+  kWave: 1.0,         // carrier wavenumber (must equal packetSpeed)
+  // Pointer particle physics
+  sigmaM: 4.5,
+  vMeasure: 0.25,
+  zMin: -26, zMax: 26,
+  // Screen histogram
+  screenBins: 300,
+  // Animation
+  tMax: 260,
+};
+
+const state = {
+  t: 0,
+  playing: false,
+  speed: 1.0,
+  observe: false,
+  viewMode: 'wave',       // 'wave' | 'particles'
+  showConfig: false,
+  setup: 'double',        // 'double' | 'single'
+  apertureWidth: 30,      // width of single-slit aperture (only when setup === 'single')
+  apertureSubSamples: 14, // number of Gaussian sub-packets used to model top-hat aperture
+  hits: new Float32Array(params.screenBins), // accumulated particle-hit histogram
+  hitsCount: 0,
+  lastFrameTime: 0,
+  rafId: null,
+  // Cached max intensities for display stability
+  mainMaxI: 0.02,
+  configMaxI: 0.02,
+  screenMaxI: 0.02,
+};
+
+const tSlit = (params.slitX - params.initialX) / params.packetSpeed;
+
+/* ============================================================
+ * PHYSICS
+ * ============================================================ */
+
+// 2D Gaussian wave packet for a free particle (ℏ = m = 1).
+// Initial state: ψ(r, 0) ∝ exp(-(x-cx)²/(4σ_x0²)) · exp(-(y-cy)²/(4σ_y0²)) · exp(ik(x-cx))
+// Evolved at time t using the exact complex-Gaussian Schrödinger solution:
+//   envelope  : Gaussian with σ²(t) = σ₀²(1 + (t/(2σ₀²))²)
+//   phase     : plane-wave carrier + quadratic (Fresnel) correction in both axes
+// The quadratic y² phase is what gives the two-slit interference — without it the
+// two packets would be exactly in phase at all (x, y) and no fringes would appear.
+function packet2D(x, y, t, cx, cy, vx, sx0, sy0, k) {
+  const dx = x - cx - vx * t;
+  const dy = y - cy;
+  const ux = t / (2 * sx0 * sx0);
+  const uy = t / (2 * sy0 * sy0);
+  const denomX = 1 + ux * ux;
+  const denomY = 1 + uy * uy;
+  const envExp = -(dx * dx) / (4 * sx0 * sx0 * denomX)
+                 - (dy * dy) / (4 * sy0 * sy0 * denomY);
+  const amp = Math.pow(denomX * denomY, -0.25);
+  const phase = k * (x - cx) - 0.5 * k * k * t
+              + (dx * dx) * ux / (4 * sx0 * sx0 * denomX)
+              + (dy * dy) * uy / (4 * sy0 * sy0 * denomY);
+  const e = Math.exp(envExp);
+  return { re: amp * e * Math.cos(phase), im: amp * e * Math.sin(phase) };
+}
+
+// 1D Gaussian packet for the pointer particle (in z). Same complex-Gaussian form.
+// Pointer is real-valued enough for our purposes (k_z = 0), so we keep the phase
+// correction but drop the imaginary part for simplicity in products.
+function packet1D(z, t, cz, vz, sz0) {
+  const dz = z - cz - vz * t;
+  const uz = t / (2 * sz0 * sz0);
+  const denomZ = 1 + uz * uz;
+  const envExp = -(dz * dz) / (4 * sz0 * sz0 * denomZ);
+  const amp = Math.pow(denomZ, -0.25);
+  // Phase: only a small dispersive y²-like correction. For visualization of
+  // |φ|² and for pointer overlap this is negligible — keep pointer phase = 0.
+  return { re: amp * Math.exp(envExp), im: 0 };
+}
+
+// Slit components of the electron wavefunction (before slit = single packet)
+function electronComponents(x, y, t) {
+  if (t < tSlit) {
+    const p = packet2D(x, y, t, params.initialX, 0, params.packetSpeed,
+                        params.sigma0, params.sigma0, params.kWave);
+    return { before: true, psiUp: p, psiDown: { re: 0, im: 0 } };
+  }
+  const tA = t - tSlit;
+  const psiUp = packet2D(x, y, tA, params.slitX, params.slitSep / 2,
+                          params.packetSpeed, params.sigmaSlitX, params.sigmaSlitY,
+                          params.kWave);
+  const psiDown = packet2D(x, y, tA, params.slitX, -params.slitSep / 2,
+                            params.packetSpeed, params.sigmaSlitX, params.sigmaSlitY,
+                            params.kWave);
+  // Normalize the two-slit superposition by 1/√2
+  const s = 1 / Math.SQRT2;
+  psiUp.re *= s; psiUp.im *= s;
+  psiDown.re *= s; psiDown.im *= s;
+  return { before: false, psiUp, psiDown };
+}
+
+// Single-slit wave function — top-hat aperture approximated by a sum of N narrow
+// Gaussian sub-packets spread across the aperture width w. Their coherent sum
+// produces the expected Fraunhofer/Fresnel sinc-like diffraction pattern on the screen.
+function electronSingleSlit(x, y, t) {
+  if (t < tSlit) {
+    const p = packet2D(x, y, t, params.initialX, 0, params.packetSpeed,
+                        params.sigma0, params.sigma0, params.kWave);
+    return { before: true, psi: p };
+  }
+  const tA = t - tSlit;
+  const w = state.apertureWidth;
+  const N = state.apertureSubSamples;
+  const sigmaSub = Math.max(0.5, w / (3 * N));
+  let re = 0, im = 0;
+  for (let i = 0; i < N; i++) {
+    const y_i = -w / 2 + (i + 0.5) / N * w;
+    const p = packet2D(x, y, tA, params.slitX, y_i,
+                        params.packetSpeed, params.sigmaSlitX, sigmaSub, params.kWave);
+    re += p.re;
+    im += p.im;
+  }
+  const invN = 1 / N;
+  return { before: false, psi: { re: re * invN, im: im * invN } };
+}
+
+// Pointer wave packets φ_up(z,t), φ_dn(z,t), φ_0(z) = initial motionless packet
+function pointerPackets(z, t) {
+  const tA = Math.max(0, t - tSlit);
+  if (!state.observe) {
+    const p = packet1D(z, 0, 0, 0, params.sigmaM);
+    return { phiUp: p, phiDn: p, phi0: p };
+  }
+  // With observation: after slit interaction, pointer splits with velocity ±vMeasure
+  const phiUp = packet1D(z, tA, 0, +params.vMeasure, params.sigmaM);
+  const phiDn = packet1D(z, tA, 0, -params.vMeasure, params.sigmaM);
+  const phi0  = packet1D(z, 0, 0, 0, params.sigmaM);
+  return { phiUp, phiDn, phi0 };
+}
+
+// Overlap integral ⟨φ_up(t) | φ_dn(t)⟩ of two Gaussians separated by Δz = 2 v_M t_A
+// Purely real, equals exp(−Δz²/(8 σ²)) for unit-normalized Gaussians of equal width.
+function pointerOverlap(t) {
+  if (!state.observe) return 1;
+  const tA = Math.max(0, t - tSlit);
+  const dz = 2 * params.vMeasure * tA;
+  // Pointer width (kept approximately fixed by slow spread)
+  const sz = params.sigmaM;
+  return Math.exp(-(dz * dz) / (8 * sz * sz));
+}
+
+// The reduced electron intensity on the xy plane given observation state.
+// Observed: trace over pointer → cross term scaled by ⟨φ_up|φ_dn⟩
+// Unobserved: pointer stays in a single state → full coherent sum
+function electronIntensity(x, y, t) {
+  if (state.setup === 'single') {
+    const s = electronSingleSlit(x, y, t);
+    return s.psi.re * s.psi.re + s.psi.im * s.psi.im;
+  }
+  const c = electronComponents(x, y, t);
+  if (c.before) return c.psiUp.re * c.psiUp.re + c.psiUp.im * c.psiUp.im;
+  const u_r = c.psiUp.re, u_i = c.psiUp.im;
+  const d_r = c.psiDown.re, d_i = c.psiDown.im;
+  const ovl = state.observe ? pointerOverlap(t) : 1.0;
+  // |u|² + |d|² + 2 Re(u* d) · overlap
+  const uu = u_r * u_r + u_i * u_i;
+  const dd = d_r * d_r + d_i * d_i;
+  const cross = 2 * (u_r * d_r + u_i * d_i);  // Re(u* · d) = u_r*d_r + u_i*d_i
+  return uu + dd + ovl * cross;
+}
+
+// Joint |Ψ(y, z, t)|² at the screen (x = screenX)
+// Ψ = ψ_up(x_s, y) φ_up(z) + ψ_dn(x_s, y) φ_dn(z)      (observe ON)
+// Ψ = [ψ_up(x_s, y) + ψ_dn(x_s, y)] · φ_0(z)            (observe OFF, factorable)
+function jointIntensityYZ(y, z, t) {
+  const xs = params.screenX;
+  // Single-slit setup: no which-path, no entanglement — Ψ = ψ_e(y) · φ₀(z)
+  if (state.setup === 'single') {
+    const s = electronSingleSlit(xs, y, t);
+    const ee = s.psi.re * s.psi.re + s.psi.im * s.psi.im;
+    const pz = packet1D(z, 0, 0, 0, params.sigmaM);
+    return ee * (pz.re * pz.re);
+  }
+  const c = electronComponents(xs, y, t);
+  if (c.before) {
+    // Still approaching slit: same factorable structure, electron lump at y=0
+    const pz = packet1D(z, 0, 0, 0, params.sigmaM);
+    const ee = c.psiUp.re * c.psiUp.re + c.psiUp.im * c.psiUp.im;
+    return ee * (pz.re * pz.re);
+  }
+  if (!state.observe) {
+    const er = c.psiUp.re + c.psiDown.re;
+    const ei = c.psiUp.im + c.psiDown.im;
+    const ee = er * er + ei * ei;
+    const pz = packet1D(z, 0, 0, 0, params.sigmaM);
+    return ee * (pz.re * pz.re);
+  }
+  // Observed: two branches, pointer split
+  const tA = t - tSlit;
+  const pUp = packet1D(z, tA, 0, +params.vMeasure, params.sigmaM);
+  const pDn = packet1D(z, tA, 0, -params.vMeasure, params.sigmaM);
+  // Ψ_re = ψu_re pu_re − ψu_im pu_im + ψd_re pd_re − ψd_im pd_im   (pointer is purely real here)
+  // Since pointer re is real and im=0, product = psi * pointer_re
+  const re = c.psiUp.re * pUp.re + c.psiDown.re * pDn.re;
+  const im = c.psiUp.im * pUp.re + c.psiDown.im * pDn.re;
+  return re * re + im * im;
+}
+
+/* ============================================================
+ * COLOR MAPPING
+ * ============================================================ */
+
+// Perceptual inferno-like palette, values in [0,1]
+function inferno(v) {
+  v = Math.max(0, Math.min(1, v));
+  // Piecewise polynomial approximation
+  const r = Math.max(0, Math.min(1,  0.0002189403 + v * ( 1.3741860 + v * (-3.5419702 + v * ( 7.5878055 + v * (-6.1045349 + v *  1.6893090))))));
+  const g = Math.max(0, Math.min(1,  0.0016097576 + v * (-0.4840780 + v * ( 1.7066660 + v * (-1.4776333 + v * ( 0.4340484 + v *  0.0000000))))));
+  const b = Math.max(0, Math.min(1,  0.0134745442 + v * ( 2.1974269 + v * (-6.5890040 + v * ( 6.2622468 + v * (-1.5593010 + v * -0.3309650))))));
+  return [Math.round(255 * r), Math.round(255 * g), Math.round(255 * b)];
+}
+
+/* ============================================================
+ * RENDER — Main canvas (wavefunction)
+ * ============================================================ */
+const mainCanvas = document.getElementById('mainCanvas');
+const mainCtx = mainCanvas.getContext('2d');
+
+const gridCanvas = document.createElement('canvas');
+gridCanvas.width = params.gridW;
+gridCanvas.height = params.gridH;
+const gridCtx = gridCanvas.getContext('2d');
+const gridImg = gridCtx.createImageData(params.gridW, params.gridH);
+
+function drawApparatus() {
+  const ctx = mainCtx;
+  const worldToPixX = (x) => (x - params.xMin) / (params.xMax - params.xMin) * params.mainW;
+  const worldToPixY = (y) => params.mainH / 2 - (y / (params.yMax - params.yMin)) * params.mainH;
+
+  const xSlitPx = worldToPixX(params.slitX);
+  const barrierW = 4;
+
+  ctx.fillStyle = 'rgba(110,110,130,0.55)';
+  if (state.setup === 'single') {
+    // Single aperture of width = apertureWidth, centered at y = 0
+    const halfWorld = state.apertureWidth / 2;
+    const yTopPx    = worldToPixY(+halfWorld);
+    const yBotPx    = worldToPixY(-halfWorld);
+    // Top segment
+    ctx.fillRect(xSlitPx - barrierW / 2, 0, barrierW, yTopPx);
+    // Bottom segment
+    ctx.fillRect(xSlitPx - barrierW / 2, yBotPx, barrierW, params.mainH - yBotPx);
+  } else {
+    // Two slits
+    const upperSlitYCenter = worldToPixY(params.slitSep / 2);
+    const lowerSlitYCenter = worldToPixY(-params.slitSep / 2);
+    const slitHalfPx = (params.slitHalfGap / (params.yMax - params.yMin)) * params.mainH;
+    // top segment
+    ctx.fillRect(xSlitPx - barrierW / 2, 0, barrierW, upperSlitYCenter - slitHalfPx);
+    // middle
+    ctx.fillRect(xSlitPx - barrierW / 2, upperSlitYCenter + slitHalfPx, barrierW, lowerSlitYCenter - slitHalfPx - (upperSlitYCenter + slitHalfPx));
+    // bottom
+    ctx.fillRect(xSlitPx - barrierW / 2, lowerSlitYCenter + slitHalfPx, barrierW, params.mainH - (lowerSlitYCenter + slitHalfPx));
+  }
+
+  // Screen
+  const xScreenPx = worldToPixX(params.screenX);
+  ctx.fillStyle = 'rgba(180,180,200,0.35)';
+  ctx.fillRect(xScreenPx - 1, 0, 3, params.mainH);
+
+  // Source marker
+  const xSrcPx = worldToPixX(params.initialX);
+  ctx.fillStyle = '#2db6ff';
+  ctx.beginPath();
+  ctx.arc(xSrcPx, params.mainH / 2, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Labels
+  ctx.font = '11px -apple-system, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(220,220,240,0.7)';
+  ctx.textAlign = 'center';
+  ctx.fillText('source', xSrcPx, params.mainH - 6);
+  ctx.fillText(state.setup === 'single' ? `aperture w = ${state.apertureWidth}` : 'double slits',  xSlitPx, params.mainH - 6);
+  ctx.fillText('screen', xScreenPx, params.mainH - 6);
+}
+
+function drawPointerIndicator() {
+  if (!state.observe) return;
+  // Small inset at top-right of main canvas showing pointer particle position(s)
+  const ctx = mainCtx;
+  const bw = 150, bh = 42;
+  const bx = params.mainW - bw - 14, by = 12;
+  ctx.fillStyle = 'rgba(18,18,28,0.85)';
+  ctx.strokeStyle = 'rgba(255,138,107,0.45)';
+  ctx.lineWidth = 1;
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+  ctx.fillStyle = '#ffb9a3';
+  ctx.font = '10px -apple-system, system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('pointer particle |φ(z)|²', bx + 8, by + 12);
+
+  // Plot pointer distribution along horizontal axis of inset
+  const yMid = by + bh - 10;
+  const n = 120;
+  const zLo = params.zMin, zHi = params.zMax;
+  let maxP = 0.01;
+  const tA = Math.max(0, state.t - tSlit);
+  const vals = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const z = zLo + (i + 0.5) / n * (zHi - zLo);
+    const pUp = packet1D(z, tA, 0, +params.vMeasure, params.sigmaM);
+    const pDn = packet1D(z, tA, 0, -params.vMeasure, params.sigmaM);
+    // Mixed state (equal branches): ½|φ_up|² + ½|φ_dn|²
+    const I = 0.5 * (pUp.re * pUp.re + pDn.re * pDn.re);
+    vals[i] = I;
+    if (I > maxP) maxP = I;
+  }
+  ctx.strokeStyle = '#ff8a6b';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const px = bx + 8 + (i / (n - 1)) * (bw - 16);
+    const py = yMid - (vals[i] / maxP) * 16;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  // 0 line
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const z0px = bx + 8 + ((0 - zLo) / (zHi - zLo)) * (bw - 16);
+  ctx.moveTo(z0px, by + 18); ctx.lineTo(z0px, yMid + 2);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('z=0', z0px, yMid + 9);
+}
+
+function renderMainWave() {
+  const { gridW, gridH, xMin, xMax, yMin, yMax } = params;
+  const data = gridImg.data;
+  const t = state.t;
+
+  // Sample intensity and find running max
+  const buf = new Float32Array(gridW * gridH);
+  let runMax = 0;
+  for (let j = 0; j < gridH; j++) {
+    const y = yMin + (j + 0.5) / gridH * (yMax - yMin);
+    for (let i = 0; i < gridW; i++) {
+      const x = xMin + (i + 0.5) / gridW * (xMax - xMin);
+      const I = electronIntensity(x, y, t);
+      buf[j * gridW + i] = I;
+      if (I > runMax) runMax = I;
+    }
+  }
+  // Temporal smoothing of max for stability
+  state.mainMaxI = 0.9 * state.mainMaxI + 0.1 * Math.max(runMax, 1e-6);
+  const norm = 1 / Math.max(state.mainMaxI * 1.05, 1e-6);
+
+  for (let idx = 0; idx < gridW * gridH; idx++) {
+    const v = Math.sqrt(Math.max(0, buf[idx] * norm));
+    const [r, g, b] = inferno(v);
+    const o = idx * 4;
+    data[o] = r; data[o + 1] = g; data[o + 2] = b; data[o + 3] = 255;
+  }
+  gridCtx.putImageData(gridImg, 0, 0);
+
+  // Paint to main canvas with smooth scaling
+  mainCtx.fillStyle = '#000';
+  mainCtx.fillRect(0, 0, params.mainW, params.mainH);
+  mainCtx.imageSmoothingEnabled = true;
+  mainCtx.imageSmoothingQuality = 'high';
+  mainCtx.drawImage(gridCanvas, 0, 0, params.mainW, params.mainH);
+
+  drawApparatus();
+  drawPointerIndicator();
+
+  // Current time label
+  mainCtx.fillStyle = 'rgba(230,230,245,0.8)';
+  mainCtx.font = '11px ui-monospace, monospace';
+  mainCtx.textAlign = 'left';
+  mainCtx.fillText(`t = ${t.toFixed(2)}`, 10, 16);
+  if (state.observe) {
+    mainCtx.fillStyle = '#ff8a6b';
+    mainCtx.fillText('measurement ON', 10, 32);
+  }
+}
+
+/* ============================================================
+ * RENDER — Main canvas (particle-hits mode)
+ * ============================================================ */
+
+function drawApparatusOnly() {
+  mainCtx.fillStyle = '#000';
+  mainCtx.fillRect(0, 0, params.mainW, params.mainH);
+  drawApparatus();
+  drawPointerIndicator();
+}
+
+// Each frame in 'particles' mode: let probabilistic hits accumulate at screen.
+function stepParticleHits(dt) {
+  const tA = state.t - tSlit;
+  if (tA <= 0) return;
+  // Hits per frame scaled by dt and "beam strength"
+  const hitsPerSec = 160;
+  const expected = hitsPerSec * dt;
+  let n = Math.floor(expected) + (Math.random() < (expected - Math.floor(expected)) ? 1 : 0);
+
+  // Rejection sample y from screen intensity
+  // Estimate max intensity at screen by scanning
+  let yMax = 0;
+  const xs = params.screenX;
+  const yMin = params.yMin, yMaxW = params.yMax;
+  for (let i = 0; i < 60; i++) {
+    const y = yMin + (i + 0.5) / 60 * (yMaxW - yMin);
+    const I = electronIntensity(xs, y, state.t);
+    if (I > yMax) yMax = I;
+  }
+  if (yMax < 1e-9) return;
+  yMax *= 1.15;
+
+  for (let k = 0; k < n; k++) {
+    let accepted = null;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const y = yMin + Math.random() * (yMaxW - yMin);
+      const I = electronIntensity(xs, y, state.t);
+      if (Math.random() * yMax < I) { accepted = y; break; }
+    }
+    if (accepted !== null) {
+      const bin = Math.floor((accepted - yMin) / (yMaxW - yMin) * params.screenBins);
+      if (bin >= 0 && bin < params.screenBins) {
+        state.hits[bin] += 1;
+        state.hitsCount++;
+      }
+    }
+  }
+}
+
+function renderMainParticles() {
+  drawApparatusOnly();
+  // Render accumulated hit locations on screen as bright dots with additive build-up
+  const xs = params.screenX;
+  const xSrcPx = (params.initialX - params.xMin) / (params.xMax - params.xMin) * params.mainW;
+  const xScreenPx = (xs - params.xMin) / (params.xMax - params.xMin) * params.mainW;
+  const xSlitPx   = (params.slitX - params.xMin) / (params.xMax - params.xMin) * params.mainW;
+
+  // Draw dim beam indicator from source → slits while wave is in flight
+  const t = state.t;
+  if (t < tSlit) {
+    const frac = Math.max(0, Math.min(1, (t / tSlit)));
+    const xNow = xSrcPx + frac * (xSlitPx - xSrcPx);
+    mainCtx.fillStyle = 'rgba(107,167,255,0.35)';
+    mainCtx.beginPath();
+    mainCtx.arc(xNow, params.mainH / 2, 6, 0, Math.PI * 2);
+    mainCtx.fill();
+  }
+
+  // Current time label
+  mainCtx.fillStyle = 'rgba(230,230,245,0.8)';
+  mainCtx.font = '11px ui-monospace, monospace';
+  mainCtx.textAlign = 'left';
+  mainCtx.fillText(`t = ${t.toFixed(2)}`, 10, 16);
+  mainCtx.fillText(`hits = ${state.hitsCount}`, 10, 32);
+
+  // Plot hit dots on a thin strip at screen position
+  const stripW = 22;
+  const rectX = xScreenPx - stripW / 2;
+  mainCtx.fillStyle = 'rgba(255,255,255,0.03)';
+  mainCtx.fillRect(rectX, 0, stripW, params.mainH);
+
+  // Find max to scale brightness
+  let hitMax = 1;
+  for (let i = 0; i < params.screenBins; i++) if (state.hits[i] > hitMax) hitMax = state.hits[i];
+
+  for (let i = 0; i < params.screenBins; i++) {
+    const count = state.hits[i];
+    if (count <= 0) continue;
+    const y = params.yMin + (i + 0.5) / params.screenBins * (params.yMax - params.yMin);
+    const yPx = params.mainH / 2 - (y / (params.yMax - params.yMin)) * params.mainH;
+    const brightness = Math.pow(count / hitMax, 0.7);
+    const c = inferno(0.3 + 0.7 * brightness);
+    mainCtx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${Math.min(1, 0.25 + 0.75 * brightness)})`;
+    const dotR = 0.8 + 1.6 * brightness;
+    mainCtx.beginPath();
+    mainCtx.arc(xScreenPx + (Math.random() - 0.5) * stripW * 0.7, yPx, dotR, 0, Math.PI * 2);
+    mainCtx.fill();
+  }
+}
+
+/* ============================================================
+ * RENDER — Screen panel (intensity curve OR hit histogram)
+ * ============================================================ */
+const screenCanvas = document.getElementById('screenCanvas');
+const screenCtx = screenCanvas.getContext('2d');
+
+function renderScreen() {
+  const W = screenCanvas.width, H = screenCanvas.height;
+  screenCtx.fillStyle = '#000';
+  screenCtx.fillRect(0, 0, W, H);
+
+  // Y axis is vertical; plot intensity horizontally (to the left)
+  const yLo = params.yMin, yHi = params.yMax;
+  const nSamples = 240;
+  const I = new Float32Array(nSamples);
+  let maxI = 0;
+  for (let i = 0; i < nSamples; i++) {
+    const y = yLo + (i + 0.5) / nSamples * (yHi - yLo);
+    I[i] = electronIntensity(params.screenX, y, state.t);
+    if (I[i] > maxI) maxI = I[i];
+  }
+  state.screenMaxI = 0.9 * state.screenMaxI + 0.1 * Math.max(maxI, 1e-6);
+  const norm = 1 / Math.max(state.screenMaxI * 1.1, 1e-6);
+
+  // Vertical axis line
+  screenCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+  screenCtx.lineWidth = 1;
+  screenCtx.beginPath();
+  screenCtx.moveTo(W - 30, 0); screenCtx.lineTo(W - 30, H);
+  screenCtx.stroke();
+
+  // y grid ticks
+  screenCtx.fillStyle = 'rgba(200,200,220,0.45)';
+  screenCtx.font = '10px ui-monospace, monospace';
+  screenCtx.textAlign = 'left';
+  for (let v = -60; v <= 60; v += 20) {
+    const py = H / 2 - (v / (yHi - yLo)) * H;
+    screenCtx.fillText(`${v > 0 ? '+' : ''}${v}`, W - 26, py + 3);
+    screenCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+    screenCtx.beginPath();
+    screenCtx.moveTo(10, py); screenCtx.lineTo(W - 30, py);
+    screenCtx.stroke();
+  }
+  screenCtx.fillStyle = 'rgba(255,255,255,0.5)';
+  screenCtx.fillText('y', W - 16, 14);
+
+  if (state.viewMode === 'particles') {
+    // Show histogram of hits
+    const yLo2 = yLo, yHi2 = yHi;
+    let hMax = 1;
+    for (let i = 0; i < params.screenBins; i++) if (state.hits[i] > hMax) hMax = state.hits[i];
+    const baseX = W - 34;
+    const barMax = baseX - 18;
+    for (let i = 0; i < params.screenBins; i++) {
+      const count = state.hits[i];
+      if (count <= 0) continue;
+      const y = yLo2 + (i + 0.5) / params.screenBins * (yHi2 - yLo2);
+      const py = H / 2 - (y / (yHi - yLo)) * H;
+      const w = (count / hMax) * barMax;
+      const v = count / hMax;
+      const c = inferno(0.3 + 0.6 * v);
+      screenCtx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      screenCtx.fillRect(baseX - w, py, w, Math.max(1, H / params.screenBins));
+    }
+    screenCtx.fillStyle = 'rgba(200,200,220,0.7)';
+    screenCtx.textAlign = 'left';
+    screenCtx.font = '11px -apple-system, system-ui';
+    screenCtx.fillText(`${state.hitsCount} hits`, 10, 20);
+    document.getElementById('screenLegend').innerHTML =
+      '<span class="swatch" style="background:#ffb04a;"></span>Accumulated particle hits';
+  } else {
+    // Plot |ψ|² at screen as continuous curve (filled)
+    const baseX = W - 34;
+    const barMax = baseX - 18;
+    // Filled area
+    screenCtx.beginPath();
+    screenCtx.moveTo(baseX, 0);
+    for (let i = 0; i < nSamples; i++) {
+      const y = yLo + (i + 0.5) / nSamples * (yHi - yLo);
+      const py = H / 2 - (y / (yHi - yLo)) * H;
+      const v = Math.min(1, I[i] * norm);
+      const px = baseX - v * barMax;
+      screenCtx.lineTo(px, py);
+    }
+    screenCtx.lineTo(baseX, H);
+    screenCtx.closePath();
+    const grad = screenCtx.createLinearGradient(0, 0, baseX, 0);
+    grad.addColorStop(0, 'rgba(90,239,201,0.0)');
+    grad.addColorStop(0.7, 'rgba(90,239,201,0.35)');
+    grad.addColorStop(1, 'rgba(90,239,201,0.75)');
+    screenCtx.fillStyle = grad;
+    screenCtx.fill();
+    // Outline
+    screenCtx.beginPath();
+    for (let i = 0; i < nSamples; i++) {
+      const y = yLo + (i + 0.5) / nSamples * (yHi - yLo);
+      const py = H / 2 - (y / (yHi - yLo)) * H;
+      const v = Math.min(1, I[i] * norm);
+      const px = baseX - v * barMax;
+      if (i === 0) screenCtx.moveTo(px, py); else screenCtx.lineTo(px, py);
+    }
+    screenCtx.strokeStyle = '#5aefc9';
+    screenCtx.lineWidth = 1.5;
+    screenCtx.stroke();
+    document.getElementById('screenLegend').innerHTML =
+      '<span class="swatch" style="background:#5aefc9;"></span>|ψ(x<sub>screen</sub>, y)|² live';
+  }
+}
+
+/* ============================================================
+ * RENDER — Configuration space |Ψ(y, z)|²
+ * ============================================================ */
+const configCanvas = document.getElementById('configCanvas');
+const configCtx = configCanvas.getContext('2d');
+const configGrid = document.createElement('canvas');
+configGrid.width = 240; configGrid.height = 160;
+const configGridCtx = configGrid.getContext('2d');
+const configGridImg = configGridCtx.createImageData(configGrid.width, configGrid.height);
+
+function renderConfigSpace() {
+  if (!state.showConfig) return;
+  const W = configCanvas.width, H = configCanvas.height;
+  configCtx.fillStyle = '#000';
+  configCtx.fillRect(0, 0, W, H);
+
+  const gw = configGrid.width, gh = configGrid.height;
+  const data = configGridImg.data;
+  const yLo = params.yMin, yHi = params.yMax;
+  const zLo = params.zMin, zHi = params.zMax;
+
+  const buf = new Float32Array(gw * gh);
+  let runMax = 0;
+  for (let j = 0; j < gh; j++) {
+    const z = zHi - (j + 0.5) / gh * (zHi - zLo);  // invert so +z is at top
+    for (let i = 0; i < gw; i++) {
+      const y = yLo + (i + 0.5) / gw * (yHi - yLo);
+      const I = jointIntensityYZ(y, z, state.t);
+      buf[j * gw + i] = I;
+      if (I > runMax) runMax = I;
+    }
+  }
+  state.configMaxI = 0.85 * state.configMaxI + 0.15 * Math.max(runMax, 1e-6);
+  const norm = 1 / Math.max(state.configMaxI * 1.05, 1e-6);
+
+  for (let idx = 0; idx < gw * gh; idx++) {
+    const v = Math.sqrt(Math.max(0, buf[idx] * norm));
+    const [r, g, b] = inferno(v);
+    const o = idx * 4;
+    data[o] = r; data[o + 1] = g; data[o + 2] = b; data[o + 3] = 255;
+  }
+  configGridCtx.putImageData(configGridImg, 0, 0);
+  configCtx.imageSmoothingEnabled = true;
+  configCtx.imageSmoothingQuality = 'high';
+  configCtx.drawImage(configGrid, 0, 0, W, H);
+
+  // Axes overlay
+  configCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+  configCtx.lineWidth = 1;
+  // z=0 line
+  const z0Px = H / 2;
+  configCtx.beginPath();
+  configCtx.moveTo(0, z0Px); configCtx.lineTo(W, z0Px); configCtx.stroke();
+  // y=0 line
+  const y0Px = W / 2;
+  configCtx.beginPath();
+  configCtx.moveTo(y0Px, 0); configCtx.lineTo(y0Px, H); configCtx.stroke();
+
+  // Axis labels
+  configCtx.fillStyle = 'rgba(220,220,240,0.75)';
+  configCtx.font = '11px ui-monospace, monospace';
+  configCtx.textAlign = 'left';
+  configCtx.fillText('y (electron transverse position)  →', 12, H - 10);
+  configCtx.save();
+  configCtx.translate(14, 20);
+  configCtx.rotate(-Math.PI / 2);
+  configCtx.textAlign = 'right';
+  configCtx.fillText('←  z (pointer position)', 0, 0);
+  configCtx.restore();
+
+  // Annotate + and − z
+  configCtx.textAlign = 'right';
+  configCtx.fillStyle = 'rgba(255,180,80,0.9)';
+  configCtx.fillText('+z (upper-slit branch)', W - 12, 18);
+  configCtx.fillStyle = 'rgba(120,180,255,0.9)';
+  configCtx.fillText('−z (lower-slit branch)', W - 12, H - 22);
+  configCtx.textAlign = 'left';
+  configCtx.fillStyle = 'rgba(220,220,240,0.65)';
+  configCtx.fillText(`t = ${state.t.toFixed(2)}    observe = ${state.observe ? 'ON' : 'OFF'}`, 12, 18);
+}
+
+/* ============================================================
+ * UI WIRING
+ * ============================================================ */
+const elTimeSlider = document.getElementById('timeSlider');
+const elTimeVal    = document.getElementById('timeVal');
+const elSpeedSlider= document.getElementById('speedSlider');
+const elSpeedVal   = document.getElementById('speedVal');
+const elPlayBtn    = document.getElementById('playBtn');
+const elResetBtn   = document.getElementById('resetBtn');
+const elObsOffBtn  = document.getElementById('obsOffBtn');
+const elObsOnBtn   = document.getElementById('obsOnBtn');
+const elObserveGroup   = document.getElementById('observeGroup');
+const elViewWaveBtn = document.getElementById('viewWaveBtn');
+const elViewPartBtn = document.getElementById('viewParticlesBtn');
+const elConfigBtn   = document.getElementById('configBtn');
+const elConfigPanel = document.getElementById('configPanel');
+const elStatusT     = document.getElementById('statusT');
+const elStatusOvl   = document.getElementById('statusOverlap');
+const elSetupDoubleBtn = document.getElementById('setupDoubleBtn');
+const elSetupSingleBtn = document.getElementById('setupSingleBtn');
+const elApertureGroup  = document.getElementById('apertureGroup');
+const elApertureSlider = document.getElementById('apertureSlider');
+const elApertureVal    = document.getElementById('apertureVal');
+
+// Time slider: maps [0, 1000] → [0, tMax]
+elTimeSlider.addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  state.t = (v / 1000) * params.tMax;
+  elTimeVal.textContent = state.t.toFixed(2);
+  if (state.viewMode === 'particles') resetHits();
+  render();
+});
+
+elSpeedSlider.addEventListener('input', (e) => {
+  state.speed = parseFloat(e.target.value);
+  elSpeedVal.textContent = `${state.speed.toFixed(1)}×`;
+});
+
+elPlayBtn.addEventListener('click', () => {
+  state.playing = !state.playing;
+  elPlayBtn.textContent = state.playing ? '⏸ Pause' : '▶ Play';
+  elPlayBtn.classList.toggle('active', state.playing);
+  state.lastFrameTime = performance.now();
+  if (state.playing && !state.rafId) {
+    state.rafId = requestAnimationFrame(loop);
+  }
+});
+
+elResetBtn.addEventListener('click', () => {
+  state.t = 0;
+  elTimeSlider.value = 0;
+  elTimeVal.textContent = '0.00';
+  resetHits();
+  render();
+});
+
+elObsOffBtn.addEventListener('click', () => {
+  state.observe = false;
+  elObsOffBtn.classList.add('active');
+  elObsOnBtn.classList.remove('active');
+  if (state.viewMode === 'particles') resetHits();
+  render();
+});
+elObsOnBtn.addEventListener('click', () => {
+  state.observe = true;
+  elObsOnBtn.classList.add('active');
+  elObsOffBtn.classList.remove('active');
+  if (state.viewMode === 'particles') resetHits();
+  render();
+});
+
+elViewWaveBtn.addEventListener('click', () => {
+  state.viewMode = 'wave';
+  elViewWaveBtn.classList.add('active');
+  elViewPartBtn.classList.remove('active');
+  render();
+});
+elViewPartBtn.addEventListener('click', () => {
+  state.viewMode = 'particles';
+  elViewPartBtn.classList.add('active');
+  elViewWaveBtn.classList.remove('active');
+  resetHits();
+  render();
+});
+
+elConfigBtn.addEventListener('click', () => {
+  state.showConfig = !state.showConfig;
+  elConfigBtn.classList.toggle('active', state.showConfig);
+  elConfigBtn.textContent = state.showConfig ? 'Hide' : 'Show';
+  elConfigPanel.classList.toggle('hidden', !state.showConfig);
+  render();
+});
+
+function applySetupUI() {
+  const isSingle = state.setup === 'single';
+  elSetupDoubleBtn.classList.toggle('active', !isSingle);
+  elSetupSingleBtn.classList.toggle('active',  isSingle);
+  elApertureGroup.style.display = isSingle ? '' : 'none';
+  // Observation toggle is only meaningful for double-slit
+  elObserveGroup.style.display = isSingle ? 'none' : '';
+  // Config space + status overlap are double-slit concepts
+  elStatusOvl.style.display     = isSingle ? 'none' : '';
+  if (isSingle) {
+    // Collapse any observation that was on; there's no pointer in single-slit mode
+    state.observe = false;
+    elObsOnBtn.classList.remove('active');
+    elObsOffBtn.classList.add('active');
+    // Hide config panel (joint electron-pointer space has no interesting structure)
+    state.showConfig = false;
+    elConfigBtn.classList.remove('active');
+    elConfigBtn.textContent = 'Show';
+    elConfigPanel.classList.add('hidden');
+  }
+}
+
+elSetupDoubleBtn.addEventListener('click', () => {
+  state.setup = 'double';
+  applySetupUI();
+  if (state.viewMode === 'particles') resetHits();
+  render();
+});
+elSetupSingleBtn.addEventListener('click', () => {
+  state.setup = 'single';
+  applySetupUI();
+  if (state.viewMode === 'particles') resetHits();
+  render();
+});
+
+elApertureSlider.addEventListener('input', (e) => {
+  state.apertureWidth = parseInt(e.target.value, 10);
+  elApertureVal.textContent = `${state.apertureWidth}`;
+  if (state.viewMode === 'particles') resetHits();
+  render();
+});
+
+function resetHits() {
+  state.hits.fill(0);
+  state.hitsCount = 0;
+}
+
+/* ============================================================
+ * ANIMATION LOOP
+ * ============================================================ */
+function render() {
+  // Main
+  if (state.viewMode === 'wave') {
+    renderMainWave();
+  } else {
+    renderMainParticles();
+  }
+  renderScreen();
+  renderConfigSpace();
+
+  // Status chips
+  elStatusT.textContent = `t = ${state.t.toFixed(2)}`;
+  const ovl = pointerOverlap(state.t);
+  elStatusOvl.textContent = `⟨φ_up|φ_dn⟩ = ${ovl.toFixed(3)}`;
+}
+
+function loop(now) {
+  const dt = Math.min(0.1, (now - state.lastFrameTime) / 1000);
+  state.lastFrameTime = now;
+  if (state.playing) {
+    state.t += state.speed * 28 * dt;  // world-time per real-second
+    if (state.t > params.tMax) state.t = 0;
+    elTimeSlider.value = (state.t / params.tMax) * 1000;
+    elTimeVal.textContent = state.t.toFixed(2);
+    if (state.viewMode === 'particles') stepParticleHits(dt * state.speed);
+  }
+  render();
+  if (state.playing) state.rafId = requestAnimationFrame(loop);
+  else state.rafId = null;
+}
+
+/* ============================================================
+ * INITIAL PAINT
+ * ============================================================ */
+render();
+</script>
+</body>
+</html>
