@@ -233,6 +233,10 @@ a:focus {
   margin-top: 0.45rem;
 }
 
+.published-papers {
+  display: flow-root;
+}
+
 .research-layout {
   display: flex;
   flex-wrap: wrap;
@@ -245,9 +249,14 @@ a:focus {
   min-width: 0;
 }
 
+.published-papers + .research-layout .subheading {
+  margin-top: 0.75rem;
+}
+
 .research-image {
-  flex: 0 1 260px;
-  margin: 0;
+  float: right;
+  width: 260px;
+  margin: -0.35rem 0 0 1.8rem;
 }
 
 .research-image img {
@@ -301,7 +310,7 @@ a:focus {
   }
 
   .research-image {
-    flex-basis: 220px;
+    width: 220px;
   }
 }
 
@@ -324,5 +333,24 @@ a:focus {
   .contact,
   .dissertation-link {
     font-size: 1rem;
+  }
+
+  .published-papers {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .published-papers .section-title {
+    order: 1;
+  }
+
+  .published-papers .paper-list {
+    order: 2;
+  }
+
+  .research-image {
+    order: 3;
+    float: none;
+    margin: 1rem 0 0 auto;
   }
 }
