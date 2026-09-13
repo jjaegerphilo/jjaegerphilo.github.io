@@ -136,14 +136,14 @@ a:focus {
 
 .section-title {
   margin: 0 0 0.65rem;
-  font-size: 1.35rem;
+  font-size: 1.28rem;
   font-weight: 400;
   text-decoration: underline;
 }
 
 .subheading {
   margin: 1.55rem 0 0.45rem;
-  font-size: 1.23rem;
+  font-size: 1.28rem;
   font-weight: 400;
   text-decoration: underline;
 }
@@ -249,7 +249,7 @@ a:focus {
   min-width: 0;
 }
 
-.published-papers + .research-layout .subheading {
+.published-papers + .research-layout .research-column > .subheading:first-child {
   margin-top: 0.75rem;
 }
 
@@ -321,10 +321,6 @@ a:focus {
 
   .section-divider {
     margin-bottom: 1.35rem;
-  }
-
-  .section-title {
-    font-size: 1.28rem;
   }
 
   .paper-list,
